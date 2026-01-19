@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+venv/
+env/
+
+# Data (don't commit datasets)
+*.csv
+*.h5
+*.hdf5
+data/metabric/*.csv
+data/mimic_iv/*.csv
+
+# Results
+results/
+outputs/
+*.pkl
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

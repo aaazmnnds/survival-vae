@@ -1,0 +1,26 @@
+# Core scientific computing
+numpy>=1.21.0
+pandas>=1.3.0
+scipy>=1.7.0
+
+# Machine learning
+scikit-learn>=1.0.0
+scikit-survival>=0.17.0
+xgboost>=1.5.0
+
+# Deep learning
+torch>=1.10.0
+
+# Survival analysis
+lifelines>=0.27.0
+
+# Imputation methods
+# gain-impute, etc. (if available, otherwise rely on custom implementations provided in repo)
+
+# Visualization
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Utilities
+pyyaml>=6.0
+tqdm>=4.62.0
