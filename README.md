@@ -112,7 +112,7 @@ python visualization/create_figure3.py  # MAE comparison
 ```
 survival-vae/
 ├── src/models/          # Survival-VAE and baseline implementations
-├── src/missingness/     # MNAR/MAR/MCAR simulation
+├── src/missingness/     # MNAR simulation
 ├── src/evaluation/      # Evaluation metrics
 ├── experiments/         # Scripts to reproduce paper results
 └── visualization/       # Figure generation scripts
