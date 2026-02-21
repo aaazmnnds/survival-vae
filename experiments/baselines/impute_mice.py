@@ -17,7 +17,7 @@ from sklearn.impute import IterativeImputer
 from sklearn.linear_model import BayesianRidge
 
 # Configuration
-DATA_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets')
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'datasets')
 DATASETS = ['metabric', 'mimic']
 SCENARIOS = ['light', 'moderate', 'severe']
 M_IMPUTATIONS = 5

@@ -10,7 +10,7 @@ import requests
 from pathlib import Path
 
 # Configuration
-OUTPUT_DIR = '/Users/azmannads/Downloads/Research 2025/datasets'
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'datasets')
 METABRIC_URL = "https://raw.githubusercontent.com/havakv/pycox/master/pycox/datasets/data/metabric.csv"
 TARGET_FILE = os.path.join(OUTPUT_DIR, 'metabric_processed.csv')
 

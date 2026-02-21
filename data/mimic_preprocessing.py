@@ -12,8 +12,8 @@ from pathlib import Path
 warnings.filterwarnings('ignore')
 
 # --- Configuration ---
-MIMIC_PATH = '/Users/azmannads/Downloads/Dr. Zhang/mimic-iv-2.2/'
-OUTPUT_PATH = '/Users/azmannads/Downloads/Research 2025/datasets'
+MIMIC_PATH = './mimic_data/' # Update this to your local MIMIC-IV path
+OUTPUT_PATH = os.path.join(os.path.dirname(__file__), '..', 'datasets')
 INTERMEDIATE_PATH = os.path.join(OUTPUT_PATH, 'intermediate')
 FINAL_PATH = os.path.join(OUTPUT_PATH, 'final')
 

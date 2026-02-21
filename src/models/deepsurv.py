@@ -205,7 +205,7 @@ def main():
     args = parser.parse_args()
     
     # --- File Path Logic ---
-    base_dir = "/Users/azmannads/Downloads/Research 2025/datasets"
+    base_dir = os.path.join(os.path.dirname(__file__), "..", "..", "datasets")
     if args.method == 'mice' and args.m_imp is not None:
         filename = f"{args.dataset}_imputed_{args.method}_{args.scenario}_{args.m_imp}.csv"
     else:

@@ -21,7 +21,7 @@ from sklearn.preprocessing import MinMaxScaler
 import os
 
 # Configuration
-DATA_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets')
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'datasets')
 DATASETS = ['metabric', 'mimic']
 SCENARIOS = ['light', 'moderate', 'severe']
 

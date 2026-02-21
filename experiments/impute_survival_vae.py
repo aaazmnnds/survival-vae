@@ -59,7 +59,9 @@ class ClinicalDataset(Dataset):
         id_cols = ['hadm_id', 'subject_id', 'stay_id', 'icustay_id', 'patient_id']
         cols_to_drop = [col for col in id_cols if col in self.raw_df.columns]
         
+        feature_df_numeric = self.raw_df.drop(columns=target_cols + cols_to_drop).select_dtypes(include=[np.number])
         dropped_cols = set(self.raw_df.columns) - set(feature_df_numeric.columns) - set(target_cols)
+        feature_df_numeric = self.raw_df.drop(columns=target_cols + cols_to_drop).select_dtypes(include=[np.number])
         
         # Store ID columns for later reconstruction
         self.id_data = self.raw_df[cols_to_drop] if cols_to_drop else None
@@ -145,7 +147,7 @@ def cox_ph_loss(risk_scores, events):
     # L = sum( h_i - log(sum_{j in R} exp(h_j)) )
     # Negative L for minimization
     loss_vector = (risk_scores - log_risk_cumsum) * events
-    loss = -torch.sum(loss_vector) / (torch.sum(events) + 1e-8) # Normalize
+    loss = -torch.sum(loss_vector) / (torch.sum(events) + 1e-6) # Normalize
     
     return loss
 
@@ -283,7 +285,7 @@ def impute_dataset(model, data_path, mask_path, output_path):
 # ============================================================================
 # 5. TRAINING LOOP
 # ============================================================================
-def train_model(dataset_path, mask_path=None, epochs=50, beta=1.0, gamma=1.0):
+def train_model(dataset_path, mask_path=None, epochs=50, beta=1.0, gamma=1.0, latent_dim=10, lr=1e-3):
     """
     beta: Weight for KL Divergence (default 1.0)
     gamma: Weight for Survival Loss (default 1.0)
@@ -294,8 +296,8 @@ def train_model(dataset_path, mask_path=None, epochs=50, beta=1.0, gamma=1.0):
     
     input_dim = dataset.data.shape[1]
     
-    model = SurvivalVAE(input_dim=input_dim)
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    model = SurvivalVAE(input_dim=input_dim, latent_dim=latent_dim)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
     
     print(f"Starting Training (Beta={beta}, Gamma={gamma})...")
     model.train()
@@ -311,55 +313,44 @@ def train_model(dataset_path, mask_path=None, epochs=50, beta=1.0, gamma=1.0):
             e = batch['e']
             
             # --- IMPT: SORT BATCH BY TIME FOR COX LOSS ---
-            # Cox Loss assumes descending order of Time
             sorted_indices = torch.argsort(t, dim=0, descending=True).reshape(-1)
             x = x[sorted_indices]
             m = m[sorted_indices]
             t = t[sorted_indices]
             e = e[sorted_indices]
             
-            # Ensure 2D shapes (in case batch_size=1)
             if x.dim() == 1: x = x.unsqueeze(0)
             if m.dim() == 1: m = m.unsqueeze(0)
-            if t.dim() == 1: t = t.unsqueeze(1) # shape [B, 1]
-            if e.dim() == 1: e = e.unsqueeze(1) # shape [B, 1]
+            if t.dim() == 1: t = t.unsqueeze(1) 
+            if e.dim() == 1: e = e.unsqueeze(1) 
             
             optimizer.zero_grad()
-            
-            # Forward
             recon_x, mu, logvar, risk = model(x, m)
             
-            # 1. Reconstruction Loss (MSE on OBSERVED values only)
-            # CRITICAL: We multiply by 'm' so we don't train on missing values (which are filled with placeholders)
-            # Using reduction='none' gives element-wise errors
-            element_wise_loss = F.mse_loss(recon_x, x, reduction='none')
-            masked_loss = element_wise_loss * m
+            # 1. Reconstruction Loss (MSE on OBSERVED values only) - NORMALIZED to per-patient
+            mse = F.mse_loss(recon_x, x, reduction='none')
+            num_obs = m.sum()
+            avg_mse = (mse * m).sum() / (num_obs + 1e-8)
+            recon_loss = avg_mse * model.input_dim
             
-            # Sum over features, Mean over batch
-            # We normalize by total observed values? Or just standard sum(dim=1).mean()?
-            # Standard VAE is usually sum(dim=1).mean() with 0s for missing
-            recon_loss = masked_loss.sum(dim=1).mean()
-            
-            # 2. KL Divergence (Sum over latent dims, Mean over batch)
-            # Matches standard VAE ELBO formulation
+            # 2. KL Divergence
             kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
             
             # 3. Survival Loss (Cox)
             surv_loss = cox_ph_loss(risk, e)
             
-            # Total Loss (using beta parameter instead of hardcoded 0.01)
+            # Total Loss
             loss = recon_loss + beta * kl_loss + gamma * surv_loss
             
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             
             total_recon += recon_loss.item()
             total_surv += surv_loss.item()
             
         if (epoch+1) % 5 == 0:
-            avg_recon = total_recon / len(dataloader)
-            avg_surv = total_surv / len(dataloader)
-            print(f"Epoch {epoch+1}/{epochs} | Recon: {avg_recon:.4f} | Surv: {avg_surv:.4f}")
+            print(f"Epoch {epoch+1}/{epochs} | Recon: {recon_loss.item():.4f} | KL: {(beta*kl_loss).item():.4f} | Surv: {(gamma*surv_loss).item():.4f}")
         
     print("Training Complete.")
     return model
@@ -377,11 +368,41 @@ if __name__ == "__main__":
     parser.add_argument('--gamma', type=float, default=1.0, help='Survival loss weight')
     parser.add_argument('--dataset', type=str, choices=['metabric', 'mimic', 'both'], default='both',
                         help='Which dataset to process: metabric, mimic, or both')
+    parser.add_argument('--json_params', type=str, help='Path to JSON file with optimized hyperparameters')
     args = parser.parse_args()
     
+    # Load optimized params if provided
+    opt_params = {}
+    if args.json_params and os.path.exists(args.json_params):
+        import json
+        with open(args.json_params, 'r') as f:
+            opt_params = json.load(f)
+        print(f"Loaded optimized parameters from {args.json_params}")
+        args.beta = opt_params.get('beta', args.beta)
+        args.gamma = opt_params.get('gamma', args.gamma)
+        args.latent_dim = opt_params.get('latent_dim', 10)
+        args.lr = opt_params.get('lr', 1e-3)
+    else:
+        args.latent_dim = 10
+        args.lr = 1e-3
+    
     # Default paths if not provided
-    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = os.path.join(SCRIPT_DIR, '..', '..', 'datasets')
+    POSSIBLE_DATA_DIRS = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), '../datasets')),  # Relative path
+    ]
+
+    DATA_DIR = None
+    for path in POSSIBLE_DATA_DIRS:
+        if os.path.exists(path):
+            DATA_DIR = path
+            break
+            
+    if DATA_DIR is None:
+        # Fallback to current relative if nothing found, though likely to fail later if not present
+        DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../datasets'))
+        print(f"Warning: Could not find datasets in expected locations. Defaulting to: {DATA_DIR}")
+    else:
+        print(f"Using datasets at: {DATA_DIR}")
     
     if args.data is None:
         # Run on ALL Datasets and ALL Scenarios
@@ -403,9 +424,9 @@ if __name__ == "__main__":
             torch.cuda.manual_seed_all(42)
         
         for dataset_name in datasets:
-            print(f"\n{'#'*60}")
+            print(f"\n{'-'*60}")
             print(f"PROCESSING DATASET: {dataset_name.upper()}")
-            print(f"{'#'*60}")
+            print(f"{'-'*60}")
             
             for severity in scenarios:
                 mnar_path = os.path.join(DATA_DIR, f'{dataset_name}_mnar_{severity}.csv')
@@ -421,7 +442,7 @@ if __name__ == "__main__":
                     print(f"{'-'*40}")
                     
                     # 1. Train model
-                    model = train_model(mnar_path, mask_path, epochs=args.epochs, beta=args.beta, gamma=args.gamma)
+                    model = train_model(mnar_path, mask_path, epochs=args.epochs, beta=args.beta, gamma=args.gamma, latent_dim=args.latent_dim, lr=args.lr)
                     
                     # 2. Save model
                     torch.save(model.state_dict(), model_save_path)
@@ -432,9 +453,9 @@ if __name__ == "__main__":
                 else:
                     print(f"\nSkipping {dataset_name.upper()} {severity.upper()} - Data not found: {mnar_path}")
         
-        print(f"\n{'='*60}")
+        print(f"\n{'-'*60}")
         print(f"All Datasets and Scenarios Processed!")
-        print(f"{'='*60}")
+        print(f"{'-'*60}")
         
     else:
         # Run on single provided file
@@ -443,9 +464,9 @@ if __name__ == "__main__":
         output_path = args.output
     
         if os.path.exists(mnar_path):
-            print(f"=" * 60)
+            print(f"-" * 60)
             print(f"Survival-VAE Imputation Pipeline (Single Run)")
-            print(f"=" * 60)
+            print(f"-" * 60)
             print(f"Input Data: {mnar_path}")
             print(f"Mask File: {mask_path}")
             print(f"Output: {output_path}")
@@ -453,7 +474,7 @@ if __name__ == "__main__":
             print(f"=" * 60)
             
             # 1. Train model
-            model = train_model(mnar_path, mask_path, epochs=args.epochs, beta=args.beta, gamma=args.gamma)
+            model = train_model(mnar_path, mask_path, epochs=args.epochs, beta=args.beta, gamma=args.gamma, latent_dim=args.latent_dim, lr=args.lr)
             
             # 2. Save model
             torch.save(model.state_dict(), args.model_save)
@@ -462,9 +483,9 @@ if __name__ == "__main__":
             # 3. Generate imputed dataset
             impute_dataset(model, mnar_path, mask_path, output_path)
             
-            print(f"\n{'='*60}")
+            print(f"\n{'-'*60}")
             print(f"Pipeline Complete!")
-            print(f"{'='*60}")
+            print(f"{'-'*60}")
         else:
             print(f"Error: Data not found at {mnar_path}")
             print("Run 'simulate_metabric_mnar.py' or 'simulate_mimic_mnar.py' first.")

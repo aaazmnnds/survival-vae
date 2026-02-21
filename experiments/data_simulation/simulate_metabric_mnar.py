@@ -8,8 +8,26 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
-INPUT_FILE = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets', 'metabric_processed.csv')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets')
+# Configuration
+POSSIBLE_DATA_DIRS = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'datasets'),
+    os.path.join(os.path.dirname(__file__), '..', '..', 'datasets'),  # User's Mac Mini path
+    os.path.abspath(os.path.join(os.path.dirname(__file__), '../datasets'))  # Relative path
+]
+
+DATA_DIR = None
+for path in POSSIBLE_DATA_DIRS:
+    if os.path.exists(path):
+        DATA_DIR = path
+        break
+
+if DATA_DIR is None:
+    # Default fallback
+    DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'datasets')
+    print(f"Warning: Could not find datasets. Defaulting to: {DATA_DIR}")
+
+INPUT_FILE = os.path.join(DATA_DIR, 'metabric_processed.csv')
+OUTPUT_DIR = DATA_DIR
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))

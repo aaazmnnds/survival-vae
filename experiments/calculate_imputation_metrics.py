@@ -19,7 +19,7 @@ import glob
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 # Configuration
-DATA_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets')
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets')
 OUTPUT_FILE = os.path.join(DATA_DIR, 'results_imputation_folds.csv')
 SUMMARY_FILE = os.path.join(DATA_DIR, 'results_imputation_summary.csv')
 
@@ -234,8 +234,8 @@ def main():
                      df_norm[col] = (df_target[col] - data_min[col]) / data_range[col]
             return df_norm
 
-        if dataset_display == 'MIMIC':
-            print("  [ normalization ] Normalizing MIMIC data to [0,1] scale for reporting...")
+        if dataset_display in ['MIMIC', 'METABRIC']:
+            print(f"  [ normalization ] Normalizing {dataset_display} data to [0,1] scale for reporting...")
             df_truth = normalize_df(df_truth)
         
         # Load CV Splits
@@ -266,7 +266,7 @@ def main():
                         imp_path = os.path.join(DATA_DIR, f"{dataset_slug}_imputed_{method}_{scenario}_{m}.csv")
                         if os.path.exists(imp_path):
                             df_temp = pd.read_csv(imp_path)
-                            if dataset_display == 'MIMIC':
+                            if dataset_display in ['MIMIC', 'METABRIC']:
                                 df_temp = normalize_df(df_temp)
                             imputed_dfs.append(df_temp)
                     
@@ -283,7 +283,7 @@ def main():
                         print(f"      File not found: {imp_path}")
                         continue
                     df_imp = pd.read_csv(imp_path)
-                    if dataset_display == 'MIMIC':
+                    if dataset_display in ['MIMIC', 'METABRIC']:
                         df_imp = normalize_df(df_imp)
                 
                 # Iterate Folds
