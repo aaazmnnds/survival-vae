@@ -162,4 +162,4 @@ Email: andrade@hiroshima-u.ac.jp
 
 ## Acknowledgments
 
-This work was supported by the Department of Science and Technology–Science Education Institute (DOST-SEI) of the Philippines through its Foreign Graduate Scholarship Program. The authors gratefully acknowledge the Informatics and Data Science Program A1-427 at Hiroshima University for providing computational resources. We acknowledge the METABRIC consortium and the PhysioNet community for making their data publicly available for research purposes. We also acknowledge the use of Claude (Anthropic) as a writing assistant for manuscript preparation.
+This work was supported by the Department of Science and Technology–Science Education Institute (DOST-SEI) of the Philippines through its Foreign Graduate Scholarship Program. The authors gratefully acknowledge the Informatics and Data Science Program A1-427 at Hiroshima University for providing computational resources. We acknowledge the METABRIC consortium and the PhysioNet community for making their data publicly available for research purposes. We also acknowledge the use of large language models as a writing assistant for manuscript preparation.
