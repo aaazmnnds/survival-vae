@@ -2,7 +2,7 @@
 
 Official implementation of "Survival-aware variational autoencoders for handling threshold-interaction missing not at random data in clinical prognosis: a two-stage validation study"
 
-**Published in:** Artificial Intelligence in Medicine  
+**Submitted to:** Journal of Biomedical Informatics (JBI)  
 **Authors:** Azman Nads, Daniel Andrade
 
 ---
@@ -23,42 +23,38 @@ Survival-VAE is a deep learning method that handles missing not at random (MNAR)
 
 ### Requirements
 - Python 3.8+
-- PyTorch 1.10+
+- PyTorch 1.12+ (supports MPS for Mac M1/M2)
 - scikit-learn 1.0+
 - scikit-survival 0.17+
+- pandas, numpy, seaborn
 
 ### Setup
 ```bash
 # Clone repository
-git clone https://github.com/[username]/survival-vae.git
+git clone https://github.com/aaazmnnds/survival-vae.git
 cd survival-vae
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Or install as package
-pip install -e .
 ```
 
 ---
 
 ## Quick Start
 ```python
-from src.models.survival_vae import SurvivalVAE
+from src.models.survival_vae import train_model, impute_dataset
 
-# Initialize model
-model = SurvivalVAE(
-    input_dim=57,
-    latent_dim=10,
-    beta=0.01,
-    gamma=1.0
+# Train model (example on small dataset)
+model = train_model(
+    dataset_path="data/sample_mnar.csv",
+    mask_path="data/sample_mask.csv",
+    epochs=50,
+    beta=0.0002,
+    gamma=0.3
 )
 
-# Train model
-model.fit(X_train, time_train, event_train)
-
 # Impute missing values
-X_imputed = model.impute(X_test)
+impute_dataset(model, "data/sample_mnar.csv", "data/sample_mask.csv", "output.csv")
 ```
 
 ---
@@ -69,14 +65,12 @@ X_imputed = model.impute(X_test)
 - **Access:** [cBioPortal](https://www.cbioportal.org/study/summary?id=brca_metabric)
 - **Size:** 1,904 patients
 - **Features:** 9 clinical/genomic features
-- **Ethics:** Publicly available for research
 
 ### MIMIC-IV
 - **Access:** [PhysioNet](https://physionet.org/content/mimiciv/2.2/)
 - **Version:** v2.2
 - **Size:** 10,733 ICU patients
-- **Features:** 57 clinical features
-- **Requirements:** CITI training certificate required
+- **Features:** 54 clinical features
 
 **Note:** Due to data use agreements, raw datasets are not included. Researchers must obtain access through official sources.
 
@@ -84,26 +78,26 @@ X_imputed = model.impute(X_test)
 
 ## Reproducing Paper Results
 
-### METABRIC Experiments (Stage A)
+### 1. Simulate MNAR Data
 ```bash
-python experiments/run_metabric.py \
-    --missingness light \
-    --method survival_vae \
-    --cv_folds 5
+python src/missingness/metabric_mnar.py
+python src/missingness/mimic_mnar.py
 ```
 
-### MIMIC-IV Experiments (Stage B)
+### 2. Run Imputation
 ```bash
-python experiments/run_mimic.py \
-    --missingness severe \
-    --method survival_vae \
-    --cv_folds 5
+# Survival-VAE
+python src/models/survival_vae.py
+
+# Baselines
+python src/models/mice_baseline.py
+python src/models/missforest_baseline.py
 ```
 
-### Generate All Figures
+### 3. Evaluate & Visualize
 ```bash
-python visualization/create_figure2.py  # RMSE comparison
-python visualization/create_figure3.py  # MAE comparison
+python src/evaluation/imputation_metrics.py
+python visualization/create_figure2.py
 ```
 
 ---
@@ -122,17 +116,15 @@ survival-vae/
 
 ## Hyperparameters
 
-Key hyperparameters from the paper (Appendix Table A.2):
+Optimized hyperparameters using Optuna (as reported in the paper):
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| Latent dimension | 10 | Dimension of latent space |
-| β | 0.01 | KL divergence weight |
-| γ | 1.0 | Cox loss weight |
-| Training epochs | 50 | Number of training iterations |
-| Batch size | 64 | Training batch size |
-
-See `experiments/config.yaml` for complete settings.
+| Parameter | METABRIC | MIMIC-IV | Description |
+|-----------|----------|----------|-------------|
+| Latent dimension | 4 | 16 | Dimension of latent space |
+| β (KL-weight) | 2e-4 | 2e-4 | KL divergence weight |
+| γ (Cox-weight) | 0.27 | 0.48 | Survival loss weight |
+| Learning Rate | 0.007 | 0.002 | Adam optimizer LR |
+| Batch size | 64 | 64 | Training batch size |
 
 ---
 
@@ -140,12 +132,11 @@ See `experiments/config.yaml` for complete settings.
 
 If you use this code in your research, please cite:
 ```bibtex
-@article{nads2025survival,
+@article{nads2026survival,
   title={Survival-aware variational autoencoders for handling threshold-interaction missing not at random data in clinical prognosis: a two-stage validation study},
   author={Nads, Azman and Andrade, Daniel},
-  journal={Artificial Intelligence in Medicine},
-  year={2025},
-  publisher={Elsevier}
+  journal={Submitted to Journal of Biomedical Informatics},
+  year={2026}
 }
 ```
 
@@ -160,7 +151,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 ## Contact
 
 **Azman Nads**  
-Department of Statistics, Mindanao State University  
+Mindanao State University  
 Email: azmannads@msutawi-tawi.edu.ph
 
 **Daniel Andrade**  
@@ -171,4 +162,4 @@ Email: andrade@hiroshima-u.ac.jp
 
 ## Acknowledgments
 
-This research was supported by the DOST-SEI Foreign Graduate Scholarship Program. We acknowledge the use of Claude (Anthropic) as a writing assistant for manuscript preparation.
+This work was supported by the Department of Science and Technology–Science Education Institute (DOST-SEI) of the Philippines through its Foreign Graduate Scholarship Program. The authors gratefully acknowledge the Informatics and Data Science Program A1-427 at Hiroshima University for providing computational resources. We acknowledge the METABRIC consortium and the PhysioNet community for making their data publicly available for research purposes. We also acknowledge the use of Claude (Anthropic) as a writing assistant for manuscript preparation.

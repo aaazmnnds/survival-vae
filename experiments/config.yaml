@@ -1,0 +1,29 @@
+# Hyperparameters from paper (Appendix Table A.2)
+
+survival_vae:
+  latent_dim: 16 # Optimized for MIMIC, 4 for METABRIC
+  epochs: 50
+  beta: 0.0002
+  gamma: 0.3 # Average between 0.27 and 0.48
+  batch_size: 64
+  learning_rate: 0.002
+
+missingness:
+  scenarios:
+    light: 0.30
+    moderate: 0.50
+    severe: 0.68
+  mechanisms:
+    - mcar
+    - mar
+    - mnar
+
+evaluation:
+  cv_folds: 5
+  random_seed: 42
+  metrics:
+    - rmse
+    - mae
+    - c_index
+    - ibs
+    - td_auc
