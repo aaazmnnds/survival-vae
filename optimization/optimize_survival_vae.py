@@ -34,10 +34,30 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sksurv.metrics import concordance_index_censored
 
-import sys
-# Add repository root to path for cross-folder discovery
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from models.survival_vae import ClinicalDataset, SurvivalVAE, cox_ph_loss
+# Import core model components
+try:
+    from impute_survival_vae import ClinicalDataset, SurvivalVAE, cox_ph_loss
+except ImportError:
+    from impute_survival_vae import ClinicalDataset, SurvivalVAE
+    
+    def cox_ph_loss(risk_scores, events):
+        """Cox Proportional Hazards Loss (Negative Log Partial Likelihood)"""
+        # Assumes data is already sorted by time (descending)
+        risk_scores = risk_scores.reshape(-1)
+        events = events.reshape(-1)
+        
+        # Stability: clamp risk scores and add epsilon (as suggested)
+        risk_scores = torch.clamp(risk_scores, min=-10, max=10)
+        hazard_ratio = torch.exp(risk_scores)
+        log_risk = torch.log(torch.cumsum(hazard_ratio, dim=0) + 1e-7)
+        uncensored_likelihood = risk_scores - log_risk
+        censored_likelihood = uncensored_likelihood * events
+        
+        num_events = events.sum()
+        if num_events < 1e-6:
+            return torch.tensor(0.0, requires_grad=True, device=risk_scores.device)
+            
+        return -censored_likelihood.sum() / num_events
 
 # Configuration
 POSSIBLE_DATA_DIRS = [
