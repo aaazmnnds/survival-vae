@@ -50,6 +50,8 @@ missingness scenarios.
 │   ├── optimize_standard_vae.py
 │   ├── optimize_survival_vae.py
 │   └── optimize_xgboost.py
+├── models/                 # Shared model architecture library
+│   └── survival_vae.py
 ├── survival/               # Survival model training
 │   └── train_survival_models.py
 ├── evaluation/             # Metrics calculation and results aggregation
@@ -63,8 +65,10 @@ missingness scenarios.
 ├── simulation/             # MNAR missingness simulation scripts
 │   ├── metabric_mnar.py
 │   └── mimic_mnar.py
-└── utils/                  # Utility scripts
-    └── create_cv_splits.py
+├── utils/                  # Utility scripts
+│   └── create_cv_splits.py
+├── requirements.txt        # Dependency versions
+└── LICENSE
 ```
 
 ---
