@@ -28,7 +28,11 @@ missingness scenarios.
 
 ```text
 .
-├── imputation/             # Imputation pipeline for all methods
+├── pipelines/              # Master pipeline scripts (primary entry points)
+│   ├── run_imputation_pipeline.py
+│   ├── run_optuna_pipeline.py
+│   └── run_survival_optimization_pipeline.py
+├── imputation/             # Imputation implementation for all methods
 │   ├── impute_gain.py
 │   ├── impute_mice.py
 │   ├── impute_mida.py
@@ -59,11 +63,8 @@ missingness scenarios.
 ├── simulation/             # MNAR missingness simulation scripts
 │   ├── metabric_mnar.py
 │   └── mimic_mnar.py
-└── utils/                  # Utility and pipeline runner scripts
-    ├── create_cv_splits.py
-    ├── run_imputation_pipeline.py
-    ├── run_optuna_pipeline.py
-    └── run_survival_optimization_pipeline.py
+└── utils/                  # Utility scripts
+    └── create_cv_splits.py
 ```
 
 ---
@@ -78,24 +79,27 @@ python simulation/mimic_mnar.py
 ```
 
 ### 2. Hyperparameter Optimization
-Use Optuna to find the best hyperparameters for imputation and survival models.
+Use the automated pipeline to tune hyperparameters for all methods (imputation and survival models) via Optuna.
 ```bash
-python optimization/optimize_survival_vae.py --dataset metabric --scenario light
-python optimization/optimize_xgboost.py --dataset mimic --scenario moderate
+# Optimized all methods for a specific dataset and scenario
+python pipelines/run_optuna_pipeline.py --dataset metabric --scenario light --fold 0
 ```
+Atomic scripts for specific methods are also available in `optimization/`.
 
 ### 3. Imputation
-Impute the missing values using the optimized configurations.
+Run the automated imputation pipeline once optimization is complete.
 ```bash
-python imputation/impute_survival_vae.py --dataset metabric --scenario light --fold 0
-python imputation/impute_mice.py --dataset mimic --scenario severe --fold 0
+# Impute using all methods for a specific dataset/scenario
+python pipelines/run_imputation_pipeline.py --dataset metabric --scenario all --fold 0
 ```
+Individual imputation scripts are also available in `imputation/`.
 
 ### 4. Train Survival Models
-Train downstream prognostic models on the imputed datasets.
+Train downstream prognostic models using the automated survival optimization pipeline.
 ```bash
-python survival/train_survival_models.py --dataset metabric --scenario light
+python pipelines/run_survival_optimization_pipeline.py --dataset metabric --scenario light --fold 0
 ```
+Alternatively, use `survival/train_survival_models.py` directly.
 
 ### 5. Evaluate Results
 Compute imputation fidelity metrics and aggregate survival performance (C-index).
