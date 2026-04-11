@@ -1,15 +1,18 @@
-# Survival-VAE: Imputation and Survival Analysis for MNAR Clinical Data
+# Survival-aware variational autoencoders for handling threshold-interaction missing not at random data in clinical prognosis
 
-Official implementation for the study on Survival-VAE, a deep generative framework for handling informative missingness (Missing Not At Random) in clinical survival data.
+Official implementation of the **Survival-VAE** framework for handled missing not at random (MNAR) conditions in clinical survival datasets.
 
 ## Overview
-Survival-VAE addresses the critical challenge of informative missingness in high-stakes clinical informatics. Unlike standard imputation methods that assume missingness is random (MAR), Survival-VAE is specifically designed for Missing Not At Random (MNAR) conditions, where the probability of a value being missing depends on the unobserved value itself or other clinical indicators. 
+Survival-VAE is a variational autoencoder (VAE) architecture that integrates Cox proportional hazards loss to preserve prognostic signals during the imputation of missing data. This repository addresses the challenge of **threshold-interaction MNAR**, a clinically realistic missingness mechanism where diagnostic test ordering depends on non-linear interactions across decision thresholds (e.g., Age x Biomarker). 
 
-The framework integrates variational autoencoders (VAE) with survival-aware network outputs to learn latent representations that preserve both the feature distribution and the prognostic signal of the data. This repository provides a formal benchmark for MNAR clinical data generation and a reproducible pipeline for hyperparameter optimization, model training, and performance evaluation.
+By optimizing for both reconstruction fidelity and survival supervision, Survival-VAE ensures that imputed clinical features remain useful for downstream prognostic modeling. The framework is validated on the METABRIC (breast cancer) and MIMIC-IV (sepsis) datasets, demonstrating superior performance in preserving survival information compared to standard VAE, MICE, missForest, GAIN, and MIDA.
 
 ## Authors and Affiliations
-* **Azman Nads** - Lead Researcher, Survival-VAE Development.
-* **Phil Bayram & Aupke et al.** - Collaborative Contributors, Domain-Adaptive Frameworks and Reliability Metrics.
+* **Azman Nads** [1,2] - azmannads@msutawi-tawi.edu.ph
+* **Daniel Andrade** [1] - andrade@hiroshima-u.ac.jp
+
+[1] Informatics and Data Science Program, Graduate School of Advanced Science and Engineering, Hiroshima University, Higashihiroshima, Hiroshima, Japan
+[2] Department of Statistics, College of Mathematical Sciences, Mindanao State University Tawi-Tawi College of Technology and Oceanography, Bongao, Tawi-Tawi, Philippines
 
 ## Repository Structure
 
@@ -59,45 +62,45 @@ The framework integrates variational autoencoders (VAE) with survival-aware netw
 ## Usage
 
 ### 1. Environment Setup
-Install the required dependencies using the provided requirements file:
+Install the necessary dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 2. Data Preparation
-Generate the 5-fold cross-validation splits for the METABRIC and MIMIC-IV datasets:
+Generate the cross-validation splits for the study:
 ```bash
 python3 utils/create_cv_splits.py
 ```
 
 ### 3. Hyperparameter Optimization
-Tuning is performed using Optuna on Fold 0 to find optimal parameters for all imputation and survival models:
+Run the Optuna optimization pipeline (performed on Fold 0):
 ```bash
 python3 pipelines/run_optuna_pipeline.py --fold 0 --dataset all --scenario all
 ```
 
 ### 4. Running the Imputation Pipeline
-Execute the full imputation study across all folders and missingness scenarios (Light, Moderate, Severe):
+Execute the full imputation study across all conditions:
 ```bash
 python3 pipelines/run_imputation_pipeline.py --fold all --dataset all --scenario all
 ```
 
 ### 5. Prognostic Performance Evaluation
-Train and evaluate downstream survival models (RSF, XGBoost, DeepSurv, DeepHit) on the imputed data:
+Train and evaluate survival models on the imputed data:
 ```bash
 python3 survival/train_survival_models.py --fold all --dataset all --scenario all
 ```
 
 ### 6. Results Aggregation
-Generate the final manuscript tables and LaTeX code:
+Generate final manuscript tables and LaTeX output:
 ```bash
 python3 evaluation/aggregate_survival_results.py --latex
 ```
 
 ## Data Availability
-This study utilizes two high-dimensional clinical datasets:
-* **METABRIC**: The Molecular Taxonomy of Breast Cancer International Consortium dataset, containing genomic and clinical profiles of breast cancer patients.
-* **MIMIC-IV**: The Medical Information Mart for Intensive Care IV dataset, providing longitudinal EHR data for sepsis cohorts (requires PhysioNet credentialed access).
+This study utilizes the following datasets:
+* **METABRIC**: Molecular Taxonomy of Breast Cancer International Consortium (OncoMX/cBioPortal).
+* **MIMIC-IV**: Medical Information Mart for Intensive Care IV (PhysioNet credentialed access).
 
 ## Requirements
 * torch==2.10.0
@@ -110,10 +113,10 @@ This study utilizes two high-dimensional clinical datasets:
 * pandas==2.2.2
 
 ## Citation
-Citation details are currently pending publication.
+Nads, A., & Andrade, D. (2025). Survival-aware variational autoencoders for handling threshold-interaction missing not at random data in clinical prognosis. (Publication pending).
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License. See LICENSE file for details.
 
 ## Acknowledgments
-The authors would like to thank the developers of PyTorch, Optuna, and the Scikit-Survival community for their invaluable tools.
+We thank Hiroshima University and Mindanao State University Tawi-Tawi for supporting this research.
