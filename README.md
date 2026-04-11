@@ -141,4 +141,5 @@ Nads, A., & Andrade, D. (2026). Survival-aware variational autoencoders for hand
 MIT License. See LICENSE file for details.
 
 ## Acknowledgments
-We thank Hiroshima University and Mindanao State University Tawi-Tawi for supporting this research.
+This work was supported by the Department of Science and Technology–Science Education Institute (DOST-SEI) of the Philippines through its Foreign Graduate Scholarship Program. The authors gratefully acknowledge the Informatics and Data Science Program A1-427 at Hiroshima University for providing computational resources. We acknowledge the METABRIC consortium and the PhysioNet community for making their data publicly available for research purposes.
+
