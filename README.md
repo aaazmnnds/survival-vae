@@ -79,27 +79,30 @@ python simulation/mimic_mnar.py
 ```
 
 ### 2. Hyperparameter Optimization
-Use the automated pipeline to tune hyperparameters for all methods (imputation and survival models) via Optuna.
+Use the automated pipeline to tune hyperparameters for all methods (imputation and survival models) via Optuna. **Note: In this study, optimization is performed using Fold 0 only.**
 ```bash
-# Optimized all methods for a specific dataset and scenario
+# Optimize all methods for a specific dataset and scenario (Fold 0 ONLY)
 python pipelines/run_optuna_pipeline.py --dataset metabric --scenario light --fold 0
 ```
 Atomic scripts for specific methods are also available in `optimization/`.
 
 ### 3. Imputation
-Run the automated imputation pipeline once optimization is complete.
+Run the automated imputation pipeline once optimization is complete. **This step should be performed for all 5 folds (0-4).**
 ```bash
-# Impute using all methods for a specific dataset/scenario
+# Impute using all methods for a specific dataset/scenario (Example: Fold 0)
 python pipelines/run_imputation_pipeline.py --dataset metabric --scenario all --fold 0
+
+# To run for all folds, iterate through --fold 0 to 4
 ```
 Individual imputation scripts are also available in `imputation/`.
 
 ### 4. Train Survival Models
-Train downstream prognostic models using the automated survival optimization pipeline.
+Train downstream prognostic models using the automated survival optimization pipeline. **Perform this for all 5 folds (0-4).**
 ```bash
+# Train on a specific fold
 python pipelines/run_survival_optimization_pipeline.py --dataset metabric --scenario light --fold 0
 ```
-Alternatively, use `survival/train_survival_models.py` directly.
+Alternatively, use `survival/train_survival_models.py` directly for individual model training.
 
 ### 5. Evaluate Results
 Compute imputation fidelity metrics and aggregate survival performance (C-index).
