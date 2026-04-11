@@ -1,165 +1,154 @@
-# Survival-VAE: Survival-aware Variational Autoencoders for MNAR Data
+# Survival-VAE
 
-Official implementation of "Survival-aware variational autoencoders for handling threshold-interaction missing not at random data in clinical prognosis: a two-stage validation study"
+**Survival-aware variational autoencoders for handling threshold-interaction
+missing not at random data in clinical prognosis**
 
-**Submitted to:** Journal of Biomedical Informatics (JBI)  
-**Authors:** Azman Nads, Daniel Andrade
+Azman Nads¹², Daniel Andrade¹
+
+¹ Informatics and Data Science Program, Graduate School of Advanced Science
+and Engineering, Hiroshima University, Japan
+² Department of Statistics, College of Mathematical Sciences, MSU Tawi-Tawi
+College of Technology and Oceanography, Philippines
 
 ---
 
 ## Overview
 
-Survival-VAE is a deep learning method that handles missing not at random (MNAR) data in clinical survival analysis by integrating survival-aware loss functions into a variational autoencoder framework.
-
-**Key Features:**
-- Addresses threshold-interaction MNAR mechanisms
-- Integrates Cox partial likelihood loss for survival-aware imputation
-- Validated on METABRIC (cancer) and MIMIC-IV (ICU) datasets
-- Outperforms MICE, missForest, GAIN, and MIDA baselines
-
----
-
-## Installation
-
-### Requirements
-- Python 3.8+
-- PyTorch 1.12+ (supports MPS for Mac M1/M2)
-- scikit-learn 1.0+
-- scikit-survival 0.17+
-- pandas, numpy, seaborn
-
-### Setup
-```bash
-# Clone repository
-git clone https://github.com/aaazmnnds/survival-vae.git
-cd survival-vae
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
----
-
-## Quick Start
-```python
-from src.models.survival_vae import train_model, impute_dataset
-
-# Train model (example on small dataset)
-model = train_model(
-    dataset_path="data/sample_mnar.csv",
-    mask_path="data/sample_mask.csv",
-    epochs=50,
-    beta=0.0002,
-    gamma=0.3
-)
-
-# Impute missing values
-impute_dataset(model, "data/sample_mnar.csv", "data/sample_mask.csv", "output.csv")
-```
-
----
-
-## Datasets
-
-### METABRIC
-- **Access:** [cBioPortal](https://www.cbioportal.org/study/summary?id=brca_metabric)
-- **Size:** 1,904 patients
-- **Features:** 9 clinical/genomic features
-
-### MIMIC-IV
-- **Access:** [PhysioNet](https://physionet.org/content/mimiciv/2.2/)
-- **Version:** v2.2
-- **Size:** 10,733 ICU patients
-- **Features:** 54 clinical features
-
-**Note:** Due to data use agreements, raw datasets are not included. Researchers must obtain access through official sources.
-
----
-
-## Reproducing Paper Results
-
-### 1. Simulate MNAR Data
-```bash
-python src/missingness/metabric_mnar.py
-python src/missingness/mimic_mnar.py
-```
-
-### 2. Run Imputation
-```bash
-# Survival-VAE
-python src/models/survival_vae.py
-
-# Baselines
-python src/models/mice_baseline.py
-python src/models/missforest_baseline.py
-```
-
-### 3. Evaluate & Visualize
-```bash
-python src/evaluation/imputation_metrics.py
-python visualization/create_figure2.py
-```
+This repository contains the implementation of Survival-VAE, a variational
+autoencoder that integrates Cox proportional hazards loss for imputing
+threshold-interaction missing not at random (MNAR) data in clinical survival
+analysis. The method is evaluated against five baseline imputation methods
+(MICE, missForest, GAIN, MIDA, Standard VAE) on METABRIC (breast cancer,
+N=1,904) and MIMIC-IV (sepsis, N=32,065) under light, moderate, and severe
+missingness scenarios.
 
 ---
 
 ## Repository Structure
-```
-survival-vae/
-├── src/models/          # Survival-VAE and baseline implementations
-├── src/missingness/     # MNAR simulation
-├── src/evaluation/      # Evaluation metrics
-├── experiments/         # Scripts to reproduce paper results
-└── visualization/       # Figure generation scripts
+
+```text
+.
+├── imputation/             # Imputation pipeline for all methods
+│   ├── impute_gain.py
+│   ├── impute_mice.py
+│   ├── impute_mida.py
+│   ├── impute_missforest.py
+│   ├── impute_standard_vae.py
+│   └── impute_survival_vae.py
+├── optimization/           # Hyperparameter tuning using Optuna
+│   ├── optimize_deephit.py
+│   ├── optimize_deepsurv.py
+│   ├── optimize_gain.py
+│   ├── optimize_mice.py
+│   ├── optimize_mida.py
+│   ├── optimize_missforest.py
+│   ├── optimize_rsf.py
+│   ├── optimize_standard_vae.py
+│   ├── optimize_survival_vae.py
+│   └── optimize_xgboost.py
+├── survival/               # Survival model training
+│   └── train_survival_models.py
+├── evaluation/             # Metrics calculation and results aggregation
+│   ├── calculate_imputation_metrics.py
+│   ├── aggregate_imputation_metrics.py
+│   ├── aggregate_survival_metrics.py
+│   ├── aggregate_survival_results.py
+│   ├── reproduce_fig_baseline_convergence.py
+│   ├── reproduce_figure_imputation_fidelity.py
+│   └── reproduce_pareto_frontiers.py
+├── simulation/             # MNAR missingness simulation scripts
+│   ├── metabric_mnar.py
+│   └── mimic_mnar.py
+└── utils/                  # Utility and pipeline runner scripts
+    ├── create_cv_splits.py
+    ├── run_imputation_pipeline.py
+    ├── run_optuna_pipeline.py
+    └── run_survival_optimization_pipeline.py
 ```
 
 ---
 
-## Hyperparameters
+## Usage
 
-Optimized hyperparameters using Optuna (as reported in the paper):
+### 1. Simulate MNAR Missingness
+Generate missingness masks based on the threshold-interaction MNAR mechanism.
+```bash
+python simulation/metabric_mnar.py
+python simulation/mimic_mnar.py
+```
 
-| Parameter | METABRIC | MIMIC-IV | Description |
-|-----------|----------|----------|-------------|
-| Latent dimension | 4 | 16 | Dimension of latent space |
-| β (KL-weight) | 2e-4 | 2e-4 | KL divergence weight |
-| γ (Cox-weight) | 0.27 | 0.48 | Survival loss weight |
-| Learning Rate | 0.007 | 0.002 | Adam optimizer LR |
-| Batch size | 64 | 64 | Training batch size |
+### 2. Hyperparameter Optimization
+Use Optuna to find the best hyperparameters for imputation and survival models.
+```bash
+python optimization/optimize_survival_vae.py --dataset metabric --scenario light
+python optimization/optimize_xgboost.py --dataset mimic --scenario moderate
+```
+
+### 3. Imputation
+Impute the missing values using the optimized configurations.
+```bash
+python imputation/impute_survival_vae.py --dataset metabric --scenario light --fold 0
+python imputation/impute_mice.py --dataset mimic --scenario severe --fold 0
+```
+
+### 4. Train Survival Models
+Train downstream prognostic models on the imputed datasets.
+```bash
+python survival/train_survival_models.py --dataset metabric --scenario light
+```
+
+### 5. Evaluate Results
+Compute imputation fidelity metrics and aggregate survival performance (C-index).
+```bash
+# Calculate metrics for a specific fold
+python evaluation/calculate_imputation_metrics.py --fold 0
+
+# Aggregate results across all folds and scenarios
+python evaluation/aggregate_survival_results.py
+```
+
+---
+
+## Data Availability
+
+**METABRIC:** Publicly available via cBioPortal
+https://www.cbioportal.org/study/summary?id=brca_metabric
+
+**MIMIC-IV v2.2:** Publicly available via PhysioNet following completion
+of required CITI training and execution of a data use agreement.
+https://physionet.org/content/mimiciv/
+
+---
+
+## Requirements
+
+Python 3.11/3.12
+PyTorch 2.10.0
+scikit-survival 0.27.0
+xgboost 3.2.0
+optuna 4.7.0
+pycox 0.3.0
+scikit-learn 1.3.2
+numpy 1.26.4
+pandas 2.2.2
 
 ---
 
 ## Citation
 
-If you use this code in your research, please cite:
-```bibtex
-@article{nads2026survival,
-  title={Survival-aware variational autoencoders for handling threshold-interaction missing not at random data in clinical prognosis: a two-stage validation study},
-  author={Nads, Azman and Andrade, Daniel},
-  journal={Submitted to Journal of Biomedical Informatics},
-  year={2026}
-}
-```
+[To be added upon acceptance]
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## Contact
-
-**Azman Nads**  
-Mindanao State University  
-Email: azmannads@msutawi-tawi.edu.ph
-
-**Daniel Andrade**  
-Hiroshima University  
-Email: andrade@hiroshima-u.ac.jp
+MIT License
 
 ---
 
 ## Acknowledgments
 
-This work was supported by the Department of Science and Technology–Science Education Institute (DOST-SEI) of the Philippines through its Foreign Graduate Scholarship Program. The authors gratefully acknowledge the Informatics and Data Science Program A1-427 at Hiroshima University for providing computational resources. We acknowledge the METABRIC consortium and the PhysioNet community for making their data publicly available for research purposes. We also acknowledge the use of large language models as a writing assistant for manuscript preparation.
+Supported by the Department of Science and Technology – Science Education
+Institute (DOST-SEI) of the Philippines through its Foreign Graduate
+Scholarship Program. Computational resources provided by the Informatics
+and Data Science Program A1-427, Hiroshima University.
