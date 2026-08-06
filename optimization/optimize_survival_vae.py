@@ -34,6 +34,10 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sksurv.metrics import concordance_index_censored
 
+import sys
+# Add imputation directory to sys.path so we can import impute_survival_vae
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../imputation')))
+
 # Import core model components
 try:
     from impute_survival_vae import ClinicalDataset, SurvivalVAE, cox_ph_loss
