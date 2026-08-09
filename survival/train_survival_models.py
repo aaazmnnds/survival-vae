@@ -368,10 +368,8 @@ def train_eval_xgboost(data, params, eval_times, t_med):
 
     risk_f = bst.predict(xgb.DMatrix(X_test_f), output_margin=True)
     risk_train = bst.predict(dtrain, output_margin=True)
-    from sksurv.linear_model import CoxPHSurvivalAnalysis
-    cox_breslow = CoxPHSurvivalAnalysis(ties='breslow')
-    cox_breslow.fit(risk_train.reshape(-1, 1), y_trainval)
-    surv_funcs = cox_breslow.predict_survival_function(risk_f.reshape(-1, 1))
+    breslow = BreslowEstimator().fit(risk_train, T_trainval, E_trainval)
+    surv_funcs = breslow.get_survival_function(risk_f)
 
     # Clip eval_times to valid range for IBS/AUC
     max_test_t = y_test_f['Survival_in_days'].max()
@@ -401,7 +399,7 @@ def train_eval_deepsurv(data, params, eval_times, t_med):
     hidden_size = int(params.get('hidden_size', 32)) if params else 32
     dropout = float(params.get('dropout', 0.3)) if params else 0.3
     lr = float(params.get('lr', 0.001)) if params else 0.001
-    batch_size = 512
+    batch_size = int(params.get('batch_size', 64)) if params else 64
 
     X_trainval = np.vstack([X_train, X_val])
     T_trainval = np.concatenate([T_train, T_val]).astype(np.float32)
@@ -419,7 +417,7 @@ def train_eval_deepsurv(data, params, eval_times, t_med):
             X_train.astype(np.float32),
             (T_train.astype(np.float32), E_train.astype(np.float32)),
             batch_size=batch_size, epochs=100,
-            callbacks=[tt.callbacks.EarlyStopping(patience=10)],
+            callbacks=[tt.callbacks.EarlyStopping(patience=10), tt.callbacks.TerminateOnNaN()],
             val_data=(X_val.astype(np.float32),
                       (T_val.astype(np.float32), E_val.astype(np.float32))),
             verbose=False
@@ -478,7 +476,7 @@ def train_eval_deephit(data, params, eval_times, t_med):
     lr = float(params.get('lr', 0.001)) if params else 0.001
     num_durations = int(params.get('num_durations', 10)) if params else 10
     alpha = float(params.get('alpha', 0.2)) if params else 0.2
-    batch_size = 512
+    batch_size = int(params.get('batch_size', 64)) if params else 64
 
     try:
         labtrans = DeepHitSingle.label_transform(num_durations)
@@ -501,7 +499,7 @@ def train_eval_deephit(data, params, eval_times, t_med):
         model.fit(
             X_train.astype(np.float32), y_train_dt,
             batch_size=batch_size, epochs=100,
-            callbacks=[tt.callbacks.EarlyStopping(patience=10)],
+            callbacks=[tt.callbacks.EarlyStopping(patience=10), tt.callbacks.TerminateOnNaN()],
             val_data=(X_val.astype(np.float32), y_val_dt),
             verbose=False
         )

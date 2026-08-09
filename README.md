@@ -1,145 +1,87 @@
-# Survival-aware variational autoencoders for handling threshold-interaction missing not at random data in clinical prognosis
+# MNAR-SVAE
 
-Official implementation of the **Survival-VAE** framework for handling missing not at random (MNAR) conditions in clinical survival datasets.
+## 1. Overview
+MNAR-SVAE is a variational autoencoder integrating Cox proportional hazards loss for clinical survival analysis under threshold-interaction MNAR conditions. We validated the model on METABRIC ($N=1,904$) and MIMIC-IV ($N=25,439$, first hospital admission, first 24-hour vitals). The manuscript is under review at Scientific Reports.
 
-## Overview
-Survival-VAE is a variational autoencoder (VAE) architecture that integrates Cox proportional hazards loss to preserve prognostic signals during the imputation of missing data. This repository addresses the challenge of **threshold-interaction MNAR**, a clinically realistic missingness mechanism where diagnostic test ordering depends on non-linear interactions across decision thresholds (e.g., Age x Biomarker). 
-
-By optimizing for both reconstruction fidelity and survival supervision, Survival-VAE ensures that imputed clinical features remain useful for downstream prognostic modeling. The framework is validated on the METABRIC (breast cancer) and MIMIC-IV (sepsis) datasets, demonstrating superior performance in preserving survival information compared to standard VAE, MICE, missForest, GAIN, and MIDA.
-
-## Authors and Affiliations
-* **Azman Nads** [1,2] - azmannads@msutawi-tawi.edu.ph
-* **Daniel Andrade** [1] - andrade@hiroshima-u.ac.jp
-
-[1] Informatics and Data Science Program, Graduate School of Advanced Science and Engineering, Hiroshima University, Higashihiroshima, Hiroshima, Japan
-[2] Department of Statistics, College of Mathematical Sciences, Mindanao State University Tawi-Tawi College of Technology and Oceanography, Bongao, Tawi-Tawi, Philippines
-
-## Repository Structure
-
+## 2. Repository Structure
 ```text
-├── pipelines/              # Master pipeline scripts (primary entry points)
-│   ├── run_imputation_pipeline.py             # Automates imputation for all methods/folds
-│   ├── run_optuna_pipeline.py                 # Optimizes imputation hyperparameters
-│   └── run_survival_optimization_pipeline.py  # Optimizes downstream survival model parameters
-├── imputation/             # Imputation implementation for all methods
-│   ├── impute_gain.py
-│   ├── impute_mice.py
-│   ├── impute_mida.py
-│   ├── impute_missforest.py
-│   ├── impute_standard_vae.py
-│   └── impute_survival_vae.py
-├── optimization/           # Hyperparameter tuning logic using Optuna
-│   ├── optimize_deephit.py
-│   ├── optimize_deepsurv.py
-│   ├── optimize_gain.py
-│   ├── optimize_mice.py
-│   ├── optimize_mida.py
-│   ├── optimize_missforest.py
-│   ├── optimize_rsf.py
-│   ├── optimize_standard_vae.py
-│   ├── optimize_survival_vae.py
-│   └── optimize_xgboost.py
-├── survival/               # Survival model training and evaluation
-│   └── train_survival_models.py
-├── evaluation/             # Metrics calculation and results aggregation
-│   ├── calculate_imputation_metrics.py        # Per-fold RMSE/MAE calculation
-│   ├── aggregate_imputation_metrics.py        # Multi-fold imputation fidelity aggregation
-│   ├── aggregate_survival_metrics.py          # Multi-fold clinical utility aggregation
-│   └── aggregate_survival_results.py          # Final manuscript table generation
-├── figures/                # Scripts to reproduce manuscript figures
-│   ├── reproduce_fig_baseline_convergence.py
-│   ├── reproduce_figure_imputation_fidelity.py
-│   └── reproduce_pareto_frontiers.py
-├── simulation/             # MNAR missingness simulation scripts
-│   ├── metabric_mnar.py
-│   └── mimic_mnar.py
-├── utils/                  # Utility scripts
-│   └── create_cv_splits.py
-├── requirements.txt        # Dependency versions
-└── LICENSE
+survival-vae/
+├── datasets/          # CV split JSON files (data not included)
+├── evaluation/        # Aggregation and figure reproduction scripts
+├── imputation/        # Imputation model implementations
+├── optimization/      # Optuna hyperparameter search scripts
+├── pipelines/         # Pipeline wrapper scripts
+├── simulation/        # MNAR simulation scripts
+├── survival/          # Downstream survival model training and evaluation
+├── utils/             # Data extraction and preprocessing utilities
+├── requirements.txt
+└── README.md
 ```
 
-## Usage
-
-### 1. Environment Setup
-Install the necessary dependencies:
+## 3. Requirements
 ```bash
 pip install -r requirements.txt
 ```
+Key packages: `torch==2.10.0`, `scikit-survival==0.27.0`, `xgboost==3.2.0`, `optuna==4.7.0`, `pycox==0.3.0`
 
-### 2. Data Preparation
-Generate the cross-validation splits for the study:
+## 4. Data
+### METABRIC
+Accessed via `pycox.datasets.metabric` (https://github.com/havakv/pycox).
+
+### MIMIC-IV v2.2
+Available through PhysioNet (https://physionet.org/content/mimiciv/2.2/) following CITI training and data use agreement execution. After downloading, set the MIMIC path in `utils/extract_mimic_data.py`.
+
+## 5. Pipeline
+Step 1: Generate CV splits
 ```bash
 python3 utils/create_cv_splits.py
 ```
 
-### 3. Hyperparameter Optimization (Optuna)
-Optimization is performed on Fold 0 to find the best parameters for both imputation and survival models.
-
-**Tune Imputation Models:**
+Step 2: Hyperparameter optimization (fold 0 only)
 ```bash
 python3 pipelines/run_optuna_pipeline.py --fold 0 --dataset all --scenario all
 ```
 
-**Tune Downstream Survival Models:**
+Step 3: Imputation (all folds)
 ```bash
-python3 pipelines/run_survival_optimization_pipeline.py --fold 0 --dataset all --scenario all
+python3 pipelines/run_imputation_pipeline.py --fold all --dataset all --scenario all --method all
 ```
 
-### 4. Running the Imputation Study
-Execute the full imputation pipeline across all 5 folds and missingness scenarios (Light, Moderate, Severe):
+Step 4: Survival model optimization (fold 0 only)
 ```bash
-python3 pipelines/run_imputation_pipeline.py --fold all --dataset all --scenario all
+python3 pipelines/run_survival_optimization_pipeline.py --fold 0 --dataset all --scenario all --method all
 ```
 
-### 5. Imputation Fidelity Evaluation
-Calculate and aggregate RMSE/MAE metrics across all folds.
-
-**Per-Fold Metrics:**
+Step 5: Survival model evaluation (all folds)
 ```bash
-python3 evaluation/calculate_imputation_metrics.py --fold 0
+python3 survival/train_survival_models.py --fold all --dataset all --scenario all --method all
 ```
 
-**Aggregate Fidelity Table:**
+Step 6: Aggregate results
 ```bash
-python3 evaluation/aggregate_imputation_metrics.py --latex
-```
-
-### 6. Prognostic Performance Evaluation (Survival)
-Train and evaluate survival models (RSF, XGBoost, etc.) on the imputed data across all folds.
-
-**Execution:**
-```bash
-python3 survival/train_survival_models.py --fold all --dataset all --scenario all
-```
-
-**Aggregate Clinical Utility Tables:**
-```bash
+python3 evaluation/aggregate_imputation_metrics.py
 python3 evaluation/aggregate_survival_metrics.py
-python3 evaluation/aggregate_survival_results.py --latex
 ```
 
-## Data Availability
-This study utilizes the following clinical datasets:
-* **METABRIC**: The Molecular Taxonomy of Breast Cancer International Consortium dataset (available via OncoMX/cBioPortal).
-* **MIMIC-IV**: The Medical Information Mart for Intensive Care IV dataset for sepsis cohorts (requires PhysioNet credentialed access).
+Step 7: Reproduce figures
+```bash
+# Optional: set environment variables for custom paths
+export SVAE_RESULTS_DIR=/path/to/Survival-VAE_study/final
+export SVAE_OUTPUT_DIR=/path/to/output/figures
 
-## Requirements
-* torch==2.10.0
-* scikit-survival==0.27.0
-* xgboost==3.2.0
-* optuna==4.7.0
-* pycox==0.3.0
-* scikit-learn==1.3.2
-* numpy==1.26.4
-* pandas==2.2.2
+python3 evaluation/reproduce_figure_imputation_fidelity.py
+python3 evaluation/reproduce_figure_clinical_utility.py
+```
 
-## Citation
-Nads, A., & Andrade, D. (2026). Survival-aware variational autoencoders for handling threshold-interaction missing not at random data in clinical prognosis. (Publication pending).
+## 6. MNAR Simulation
+The threshold-interaction MNAR mechanism masks target variables with probability $P(M_{ij}=1 \mid X) = \sigma(\alpha \cdot [\mathbb{I}(X_{i,A} > \tau) \cdot X_{i,B}] + \lambda)$. For METABRIC, the interaction variable MKI67 is also a masked target variable, making the mechanism genuinely MNAR. For MIMIC-IV, lactate drives its own missingness. Simulation scripts are in `simulation/`.
 
-## License
-MIT License. See LICENSE file for details.
+## 7. Citation
+```text
+Nads, A., & Andrade, D. (under review). Survival-supervised variational autoencoders
+for robust clinical prognosis under missing not at random conditions.
+Scientific Reports.
+```
 
-## Acknowledgments
-This work was supported by the Department of Science and Technology–Science Education Institute (DOST-SEI) of the Philippines through its Foreign Graduate Scholarship Program. The authors gratefully acknowledge the Informatics and Data Science Program A1-427 at Hiroshima University for providing computational resources. We acknowledge the METABRIC consortium and the PhysioNet community for making their data publicly available for research purposes.
-
+## 8. License
+MIT License
