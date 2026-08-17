@@ -56,20 +56,21 @@ def main():
     target_datasets = ["metabric", "mimic"] if args.dataset == "all" else [args.dataset]
     target_scenarios = ["light", "moderate", "severe"] if args.scenario == "all" else [args.scenario]
     
-    # Dynamically find the directory where this script is located
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Dynamically find the repo root and optimization directory
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    opt_dir = os.path.join(repo_root, "optimization")
     
     # Default trials: 100 for VAEs/Baselines, 50 for missForest
     def get_trials(default_val):
         return args.trials if args.trials is not None else default_val
 
     scripts = [
-        (os.path.join(script_dir, "optimize_survival_vae.py"), "Survival-VAE Optuna", get_trials(100)),
-        (os.path.join(script_dir, "optimize_standard_vae.py"), "Standard VAE Optuna", get_trials(100)),
-        (os.path.join(script_dir, "optimize_gain.py"), "GAIN Optuna", get_trials(100)),
-        (os.path.join(script_dir, "optimize_mida.py"), "MIDA Optuna", get_trials(100)),
-        (os.path.join(script_dir, "optimize_mice.py"), "MICE Optuna", get_trials(100)),
-        (os.path.join(script_dir, "optimize_missforest.py"), "missForest Optuna", get_trials(50)),
+        (os.path.join(opt_dir, "optimize_survival_vae.py"), "Survival-VAE Optuna", get_trials(100)),
+        (os.path.join(opt_dir, "optimize_standard_vae.py"), "Standard VAE Optuna", get_trials(100)),
+        (os.path.join(opt_dir, "optimize_gain.py"), "GAIN Optuna", get_trials(100)),
+        (os.path.join(opt_dir, "optimize_mida.py"), "MIDA Optuna", get_trials(100)),
+        (os.path.join(opt_dir, "optimize_mice.py"), "MICE Optuna", get_trials(100)),
+        (os.path.join(opt_dir, "optimize_missforest.py"), "missForest Optuna", get_trials(50)),
     ]
 
     total_runs = len(target_datasets) * len(target_scenarios) * len(scripts)

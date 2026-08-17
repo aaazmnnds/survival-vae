@@ -7,7 +7,8 @@ from datetime import timedelta
 
 def run_script(script_name, args):
     """Runs a python script with the given arguments and tracks execution time."""
-    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), script_name)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script_path = os.path.join(repo_root, "imputation", script_name)
     
     cmd = [
         "python3", script_path,

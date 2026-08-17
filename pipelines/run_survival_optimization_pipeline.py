@@ -56,15 +56,16 @@ def main():
     target_scenarios = ["light", "moderate", "severe"] if args.scenario == "all" else [args.scenario]
     target_methods = ["survival_vae", "standard_vae", "gain", "mida", "mice", "missforest"] if args.method == "all" else [args.method]
     
-    # Dynamically find the directory where this script is located
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Dynamically find the repo root and optimization directory
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    opt_dir = os.path.join(repo_root, "optimization")
     
     # Define survival optimization scripts
     scripts = [
-        (os.path.join(script_dir, "optimize_rsf.py"), "RSF Optuna"),
-        (os.path.join(script_dir, "optimize_xgboost.py"), "XGBoost Optuna"),
-        (os.path.join(script_dir, "optimize_deepsurv.py"), "DeepSurv Optuna"),
-        (os.path.join(script_dir, "optimize_deephit.py"), "DeepHit Optuna"),
+        (os.path.join(opt_dir, "optimize_rsf.py"), "RSF Optuna"),
+        (os.path.join(opt_dir, "optimize_xgboost.py"), "XGBoost Optuna"),
+        (os.path.join(opt_dir, "optimize_deepsurv.py"), "DeepSurv Optuna"),
+        (os.path.join(opt_dir, "optimize_deephit.py"), "DeepHit Optuna"),
     ]
 
     total_runs = len(target_datasets) * len(target_scenarios) * len(target_methods) * len(scripts)
