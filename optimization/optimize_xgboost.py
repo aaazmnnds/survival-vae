@@ -20,23 +20,7 @@ warnings.filterwarnings('ignore')
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # Configuration
-POSSIBLE_DATA_DIRS = [
-    './datasets',
-    'datasets',
-    '../datasets',
-    '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
-    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
-    '.'
-]
-
-def find_dir(possibilities, default_name):
-    for p in possibilities:
-        if os.path.exists(p):
-            return p
-    return default_name
-
-DATA_DIR = find_dir(POSSIBLE_DATA_DIRS, 'datasets')
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
 
 DATASETS = ['metabric', 'mimic']
 SCENARIOS = ['light', 'moderate', 'severe']

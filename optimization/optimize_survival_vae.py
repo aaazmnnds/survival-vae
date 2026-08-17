@@ -64,24 +64,7 @@ except ImportError:
         return -censored_likelihood.sum() / num_events
 
 # Configuration
-POSSIBLE_DATA_DIRS = [
-    './datasets',
-    'datasets',
-    '../datasets',
-    '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
-    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
-    '.'
-]
-
-DATA_DIR = None
-for path in POSSIBLE_DATA_DIRS:
-    if os.path.exists(path):
-        DATA_DIR = path
-        break
-
-if DATA_DIR is None:
-    raise FileNotFoundError(f"Could not find datasets directory. Checked: {POSSIBLE_DATA_DIRS}")
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
 
 print(f"Using datasets at: {DATA_DIR}")
 SCENARIOS = ['light', 'moderate', 'severe']

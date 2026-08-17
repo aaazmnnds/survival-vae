@@ -12,22 +12,7 @@ import numpy as np
 import pandas as pd
 
 # Configuration
-POSSIBLE_DATA_DIRS = [
-    os.environ.get('SVAE_RESULTS_DIR', ''),
-    '/Users/nazu.ds/Documents/Research Collections/Research 2025/survival-vae',
-    './datasets', 'datasets', '../datasets',
-    '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
-    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
-    '.'
-]
-
-def find_dir(possibilities, default_name):
-    for p in possibilities:
-        if p and os.path.exists(p): return p
-    return default_name
-
-DATA_DIR = find_dir(POSSIBLE_DATA_DIRS, 'datasets')
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
 
 DATASETS = ['METABRIC', 'MIMIC']
 SCENARIOS = ['light', 'moderate', 'severe']

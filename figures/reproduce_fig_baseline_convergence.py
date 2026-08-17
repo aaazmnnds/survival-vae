@@ -5,15 +5,9 @@ import os
 import numpy as np
 
 # Configuration
-DATA_DIR = os.environ.get(
-    'SVAE_RESULTS_DIR',
-    '/Users/nazu.ds/Documents/Research Collections/Research 2025/survival-vae/final'
-)
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'final'))
 OPTUNA_DIR = os.path.join(DATA_DIR, 'optuna_results_final', 'fold_0')
-OUTPUT_DIR = os.environ.get(
-    'SVAE_OUTPUT_DIR',
-    '/Users/nazu.ds/Documents/Research Collections/Research 2025/Scientific_Reports_Submission'
-)
+OUTPUT_DIR = os.environ.get('SVAE_OUTPUT_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'output'))
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 METHODS = ['mice', 'missforest', 'gain', 'mida', 'standard_vae']

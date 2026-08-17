@@ -370,25 +370,7 @@ def run_survival_vae_pipeline(dataset_name, severity, fold_idx):
     device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
     print(f"Using device: {device}")
     
-    POSSIBLE_DATA_DIRS = [
-        './datasets',
-        'datasets',
-        '../datasets',
-        '/home/azman/VAE/Survival-VAE_study',
-        '/Users/azmannads/VAE 2/Survival-VAE_study',
-        '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
-        '.'
-    ]
-
-    # Optuna results are now standardized within the study folder structure
-
-    def find_dir(possibilities, default_name):
-        for p in possibilities:
-            if os.path.exists(p):
-                return p
-        return default_name
-
-    data_dir = find_dir(POSSIBLE_DATA_DIRS, 'datasets')
+    data_dir = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
     optuna_dir = os.path.join(data_dir, 'final', 'optuna_results_final')
     
     # Update output path structure to include fold index
