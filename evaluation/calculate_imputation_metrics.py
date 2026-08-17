@@ -29,6 +29,7 @@ def find_dir(possibilities, default_name):
 
 # Global path setup (will be finalized in main with argparse items)
 DATA_DIR = find_dir(POSSIBLE_DATA_DIRS, 'datasets')
+BASE_RESULTS_DIR = '/Users/nazu.ds/Documents/Research Collections/Research 2025/survival-vae'
 
 # Dataset Config
 DATASETS = {
@@ -201,7 +202,7 @@ def main():
     args = parser.parse_args()
     
     # Finalize paths
-    RESULTS_DIR = os.path.join(DATA_DIR, 'final', 'imputation_metrics', f'fold_{args.fold}')
+    RESULTS_DIR = os.path.join(BASE_RESULTS_DIR, 'final', 'imputation_metrics', f'fold_{args.fold}')
     os.makedirs(RESULTS_DIR, exist_ok=True)
     OUTPUT_FILE = os.path.join(RESULTS_DIR, 'results_imputation_folds.csv')
     SUMMARY_FILE = os.path.join(RESULTS_DIR, 'results_imputation_summary.csv')
@@ -286,7 +287,7 @@ def main():
                 if method == 'mice':
                     imputed_dfs = []
                     for m in range(1, 6):
-                        imp_path = os.path.join(DATA_DIR, 'final', 'imputation_results_final', f'fold_{args.fold}', f"{dataset_slug}_{scenario}_mice_imputed_m{m}.csv")
+                        imp_path = os.path.join(BASE_RESULTS_DIR, 'final', 'imputation_results_final', f'fold_{args.fold}', f"{dataset_slug}_{scenario}_mice_imputed_m{m}.csv")
                         if os.path.exists(imp_path):
                             print(f"      Loading MICE m={m}: {os.path.basename(imp_path)}")
                             df_temp = pd.read_csv(imp_path)
@@ -301,7 +302,7 @@ def main():
                         continue
                         
                 else: # Single imputation
-                    imp_path = os.path.join(DATA_DIR, 'final', 'imputation_results_final', f'fold_{args.fold}', f"{dataset_slug}_{scenario}_{method}_imputed.csv")
+                    imp_path = os.path.join(BASE_RESULTS_DIR, 'final', 'imputation_results_final', f'fold_{args.fold}', f"{dataset_slug}_{scenario}_{method}_imputed.csv")
                     
                     if not os.path.exists(imp_path):
                         print(f"      File not found: {imp_path}")

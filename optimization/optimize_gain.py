@@ -5,6 +5,7 @@ import time
 import optuna
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
@@ -21,7 +22,7 @@ POSSIBLE_DATA_DIRS = [
     'datasets',
     '../datasets',
     '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
+    '/Users/azmannads/VAE 2/Survival-VAE_study',
     '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
     '.'
 ]
@@ -122,7 +123,7 @@ def objective(trial, dataset_data):
         epochs = 100
         
         # Unpack pre-loaded data
-        (X_train, M_train, X_input_all, M_input_all, X_val_truth_scaled, mask_val_art, dim_all, feature_cols) = dataset_data
+        (X_train, M_train, X_input_all, M_input_all, X_val_truth_scaled, mask_val_art, dim_all, feature_cols, binary_feature_indices) = dataset_data
         
         # 3. Model
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -156,7 +157,20 @@ def objective(trial, dataset_data):
                 X_hat = X_mb * M_mb + G_sample * (1-M_mb)
                 D_prob = netD(X_hat, H_mb)
                 G_loss_temp = -torch.mean((1-M_mb) * torch.log(D_prob + 1e-8))
-                MSE_loss = torch.mean((M_mb * X_mb - M_mb * G_sample)**2) / (torch.mean(M_mb) + 1e-8)
+                num_features = X_mb.shape[1]
+                binary_cols = binary_feature_indices if binary_feature_indices is not None else []
+                cont_cols = [i for i in range(num_features) if i not in binary_cols]
+                total_loss_sum = 0.0
+                if len(cont_cols) > 0:
+                    mse_loss = F.mse_loss(G_sample[:, cont_cols], X_mb[:, cont_cols], reduction='none')
+                    masked_mse = mse_loss * M_mb[:, cont_cols]
+                    total_loss_sum += masked_mse.sum()
+                if len(binary_cols) > 0:
+                    bce_loss = F.binary_cross_entropy(G_sample[:, binary_cols], X_mb[:, binary_cols], reduction='none')
+                    masked_bce = bce_loss * M_mb[:, binary_cols]
+                    total_loss_sum += masked_bce.sum()
+                total_observed = M_mb.sum() + 1e-8
+                MSE_loss = total_loss_sum / total_observed
                 G_loss = G_loss_temp + alpha * MSE_loss
                 G_loss.backward()
                 optG.step()

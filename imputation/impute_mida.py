@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset, SubsetRandomSampler
 from sklearn.preprocessing import MinMaxScaler
@@ -28,7 +29,7 @@ POSSIBLE_DATA_DIRS = [
     'datasets',
     '../datasets',
     '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
+    '/Users/azmannads/VAE 2/Survival-VAE_study',
     '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
     '.'
 ]
@@ -198,16 +199,40 @@ def run_mida_imputation(dataset_name, severity, fold_idx):
     optimizer = optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.MSELoss(reduction='none')
     
+    KNOWN_BINARY_FEATURES = [
+        'Hormone_Tx', 'Radiotherapy', 'Chemotherapy', 'ER_Positive',
+        'Sex', 'CCI_MI', 'CCI_CHF', 'CCI_PVD', 'CCI_Stroke',
+        'CCI_Renal', 'CCI_Liver', 'CCI_Cancer'
+    ]
+    binary_feature_indices = [
+        i for i, col in enumerate(feature_cols)
+        if col in KNOWN_BINARY_FEATURES
+    ]
+
     # 5. Training Loop
     print(f"  Training MIDA ({epochs} epochs)... ")
     model.train()
     
     for epoch in range(epochs):
         total_loss = 0
-        for x_batch, m_batch in dataloader:
+        for x, m in dataloader:
             optimizer.zero_grad()
-            recon_x = model(x_batch, m_batch)
-            loss = (loss_fn(recon_x, x_batch) * m_batch).sum() / (m_batch.sum() + 1e-8)
+            recon_x = model(x, m)
+            
+            num_features = x.shape[1]
+            binary_cols = binary_feature_indices if binary_feature_indices is not None else []
+            cont_cols = [i for i in range(num_features) if i not in binary_cols]
+            total_loss_sum = 0.0
+            if len(cont_cols) > 0:
+                mse_loss = F.mse_loss(recon_x[:, cont_cols], x[:, cont_cols], reduction='none')
+                masked_mse = mse_loss * m[:, cont_cols]
+                total_loss_sum += masked_mse.sum()
+            if len(binary_cols) > 0:
+                bce_loss = F.binary_cross_entropy(recon_x[:, binary_cols], x[:, binary_cols], reduction='none')
+                masked_bce = bce_loss * m[:, binary_cols]
+                total_loss_sum += masked_bce.sum()
+            total_observed = m.sum() + 1e-8
+            loss = total_loss_sum / total_observed
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()

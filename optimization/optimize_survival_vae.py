@@ -200,7 +200,17 @@ def objective(trial, dataset_data):
         batch_size = 512
         
         # Unpack pre-loaded data
-        (X_train, M_train, T_train, E_train, X_val, M_val, T_val, E_val, input_dim) = dataset_data
+        (X_train, M_train, T_train, E_train, X_val, M_val, T_val, E_val, input_dim, feature_cols) = dataset_data
+        
+        KNOWN_BINARY_FEATURES = [
+            'Hormone_Tx', 'Radiotherapy', 'Chemotherapy', 'ER_Positive',
+            'Sex', 'CCI_MI', 'CCI_CHF', 'CCI_PVD', 'CCI_Stroke',
+            'CCI_Renal', 'CCI_Liver', 'CCI_Cancer'
+        ]
+        binary_feature_indices = [
+            i for i, col in enumerate(feature_cols)
+            if col in KNOWN_BINARY_FEATURES
+        ]
         
         # Cause 3: Data Normalization Check (as suggested)
         if trial.number % 10 == 0:
@@ -250,8 +260,20 @@ def objective(trial, dataset_data):
                 optimizer.zero_grad()
                 recon_x, mu, logvar, risk = model(x, m)
                 
-                mse = F.mse_loss(recon_x, x, reduction='none')
-                recon_loss = ((mse * m).sum() / (m.sum() + 1e-8)) * x.shape[1] 
+                num_features = x.shape[1]
+                binary_cols = binary_feature_indices if binary_feature_indices is not None else []
+                cont_cols = [i for i in range(num_features) if i not in binary_cols]
+                total_loss_sum = 0.0
+                if len(cont_cols) > 0:
+                    mse_loss = F.mse_loss(recon_x[:, cont_cols], x[:, cont_cols], reduction='none')
+                    masked_mse = mse_loss * m[:, cont_cols]
+                    total_loss_sum += masked_mse.sum()
+                if len(binary_cols) > 0:
+                    bce_loss = F.binary_cross_entropy(recon_x[:, binary_cols], x[:, binary_cols], reduction='none')
+                    masked_bce = bce_loss * m[:, binary_cols]
+                    total_loss_sum += masked_bce.sum()
+                total_observed = m.sum() + 1e-8
+                recon_loss = total_loss_sum / total_observed
                 kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
                 if e.dim() == 1: e = e.unsqueeze(1)
                 surv_loss = cox_ph_loss(risk, e)
@@ -327,7 +349,7 @@ def prepare_data(dataset_name, scenario, fold_idx):
     # Pre-sort training data for Cox Loss stability
     sort_idx = torch.argsort(T_train, descending=True)
     return (X_train[sort_idx], M_train[sort_idx], T_train[sort_idx], E_train[sort_idx], 
-            X_val, M_val, T_val, E_val, X_mnar.shape[1])
+            X_val, M_val, T_val, E_val, X_mnar.shape[1], feature_cols)
 
 def save_callback(study, trial, output_path):
     """Callback to save results after every trial (checkpointing)."""

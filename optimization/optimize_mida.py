@@ -5,6 +5,7 @@ import time
 import optuna
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
@@ -21,7 +22,7 @@ POSSIBLE_DATA_DIRS = [
     'datasets',
     '../datasets',
     '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
+    '/Users/azmannads/VAE 2/Survival-VAE_study',
     '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
     '.'
 ]
@@ -104,7 +105,7 @@ def objective(trial, dataset_data):
         batch_size = 512
         
         # Unpack pre-loaded data
-        (X_in_all, M_in_all, X_truth_scaled, mask_art, train_idx, val_idx, dim_all, feature_cols) = dataset_data
+        (X_in_all, M_in_all, X_truth_scaled, mask_art, train_idx, val_idx, dim_all, feature_cols, binary_feature_indices) = dataset_data
         latent_dim = dim_all + latent_dim_offset
         
         X_train, M_train = X_in_all[train_idx], M_in_all[train_idx]
@@ -127,7 +128,20 @@ def objective(trial, dataset_data):
                 x_mb, m_mb = x_mb.to(device), m_mb.to(device)
                 optimizer.zero_grad()
                 recon = model(x_mb, m_mb)
-                loss = (loss_fn(recon, x_mb) * m_mb).sum() / (m_mb.sum() + 1e-8)
+                num_features = x_mb.shape[1]
+                binary_cols = binary_feature_indices if binary_feature_indices is not None else []
+                cont_cols = [i for i in range(num_features) if i not in binary_cols]
+                total_loss_sum = 0.0
+                if len(cont_cols) > 0:
+                    mse_loss = F.mse_loss(recon[:, cont_cols], x_mb[:, cont_cols], reduction='none')
+                    masked_mse = mse_loss * m_mb[:, cont_cols]
+                    total_loss_sum += masked_mse.sum()
+                if len(binary_cols) > 0:
+                    bce_loss = F.binary_cross_entropy(recon[:, binary_cols], x_mb[:, binary_cols], reduction='none')
+                    masked_bce = bce_loss * m_mb[:, binary_cols]
+                    total_loss_sum += masked_bce.sum()
+                total_observed = m_mb.sum() + 1e-8
+                loss = total_loss_sum / total_observed
                 loss.backward()
                 optimizer.step()
                 
@@ -220,7 +234,16 @@ def prepare_data(dataset_name, scenario, fold_idx):
     X_in_all = np.concatenate([X_filled, TE_mnar_scaled], axis=1)
     M_in_all = np.concatenate([M_obs, np.ones_like(TE_mnar_scaled)], axis=1)
     
-    return (X_in_all, M_in_all, X_truth_scaled, mask_art, train_idx, val_idx, X_in_all.shape[1], feature_cols)
+    KNOWN_BINARY_FEATURES = [
+        'Hormone_Tx', 'Radiotherapy', 'Chemotherapy', 'ER_Positive',
+        'Sex', 'CCI_MI', 'CCI_CHF', 'CCI_PVD', 'CCI_Stroke',
+        'CCI_Renal', 'CCI_Liver', 'CCI_Cancer'
+    ]
+    binary_feature_indices = [
+        i for i, col in enumerate(feature_cols)
+        if col in KNOWN_BINARY_FEATURES
+    ]
+    return (X_in_all, M_in_all, X_truth_scaled, mask_art, train_idx, val_idx, X_in_all.shape[1], feature_cols, binary_feature_indices)
 
 def run_study(dataset, scenario, n_trials=100, fold_idx=0):
     study_name = f"mida_{dataset}_{scenario}_fold{fold_idx}"

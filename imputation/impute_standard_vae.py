@@ -133,7 +133,7 @@ def run_standard_vae_imputation(dataset_name, severity, fold_idx):
         'datasets',
         '../datasets',
         '/home/azman/VAE/Survival-VAE_study',
-        '/Users/azmannads/VAE/Survival-VAE_study',
+        '/Users/azmannads/VAE 2/Survival-VAE_study',
         '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
         '.'
     ]
@@ -209,6 +209,16 @@ def run_standard_vae_imputation(dataset_name, severity, fold_idx):
     model = StandardVAE(input_dim, latent_dim).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
+    KNOWN_BINARY_FEATURES = [
+        'Hormone_Tx', 'Radiotherapy', 'Chemotherapy', 'ER_Positive',
+        'Sex', 'CCI_MI', 'CCI_CHF', 'CCI_PVD', 'CCI_Stroke',
+        'CCI_Renal', 'CCI_Liver', 'CCI_Cancer'
+    ]
+    binary_feature_indices = [
+        i for i, col in enumerate(dataset.feature_columns)
+        if col in KNOWN_BINARY_FEATURES
+    ]
+
     # 3. Train
     print(f"  Training Standard VAE ({epochs} epochs)... ")
     model.train()
@@ -220,8 +230,20 @@ def run_standard_vae_imputation(dataset_name, severity, fold_idx):
             recon_x, mu, logvar = model(x, m)
             
             # Recon Loss (Observed Only)
-            mse = F.mse_loss(recon_x, x, reduction='none')
-            recon_loss = (mse * m).sum() / (m.sum() + 1e-8) * input_dim
+            num_features = x.shape[1]
+            binary_cols = binary_feature_indices if binary_feature_indices is not None else []
+            cont_cols = [i for i in range(num_features) if i not in binary_cols]
+            total_loss_sum = 0.0
+            if len(cont_cols) > 0:
+                mse_loss = F.mse_loss(recon_x[:, cont_cols], x[:, cont_cols], reduction='none')
+                masked_mse = mse_loss * m[:, cont_cols]
+                total_loss_sum += masked_mse.sum()
+            if len(binary_cols) > 0:
+                bce_loss = F.binary_cross_entropy(recon_x[:, binary_cols], x[:, binary_cols], reduction='none')
+                masked_bce = bce_loss * m[:, binary_cols]
+                total_loss_sum += masked_bce.sum()
+            total_observed = m.sum() + 1e-8
+            recon_loss = total_loss_sum / total_observed
             
             # KL Divergence
             kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()

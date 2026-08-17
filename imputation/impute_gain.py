@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset, SubsetRandomSampler
 from sklearn.preprocessing import MinMaxScaler
@@ -28,7 +29,7 @@ POSSIBLE_DATA_DIRS = [
     'datasets',
     '../datasets',
     '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
+    '/Users/azmannads/VAE 2/Survival-VAE_study',
     '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
     '.'
 ]
@@ -214,6 +215,16 @@ def run_gain_imputation(dataset_name, severity, fold_idx):
     sampler = SubsetRandomSampler(train_idx)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler)
     
+    KNOWN_BINARY_FEATURES = [
+        'Hormone_Tx', 'Radiotherapy', 'Chemotherapy', 'ER_Positive',
+        'Sex', 'CCI_MI', 'CCI_CHF', 'CCI_PVD', 'CCI_Stroke',
+        'CCI_Renal', 'CCI_Liver', 'CCI_Cancer'
+    ]
+    binary_feature_indices = [
+        i for i, col in enumerate(feature_cols)
+        if col in KNOWN_BINARY_FEATURES
+    ]
+
     # 5. Training Loop
     print(f"  Training GAIN ({epochs} epochs)... ")
     
@@ -243,7 +254,20 @@ def run_gain_imputation(dataset_name, severity, fold_idx):
             X_hat = M_mb * X_mb + (1 - M_mb) * G_sample
             D_prob = netD(X_hat, H_mb)
             G_loss_temp = -torch.mean((1-M_mb) * torch.log(D_prob + 1e-8))
-            MSE_loss = torch.mean((M_mb * X_mb - M_mb * G_sample)**2) / (torch.mean(M_mb) + 1e-8)
+            num_features = X_mb.shape[1]
+            binary_cols = binary_feature_indices if binary_feature_indices is not None else []
+            cont_cols = [i for i in range(num_features) if i not in binary_cols]
+            total_loss_sum = 0.0
+            if len(cont_cols) > 0:
+                mse_loss = F.mse_loss(G_sample[:, cont_cols], X_mb[:, cont_cols], reduction='none')
+                masked_mse = mse_loss * M_mb[:, cont_cols]
+                total_loss_sum += masked_mse.sum()
+            if len(binary_cols) > 0:
+                bce_loss = F.binary_cross_entropy(G_sample[:, binary_cols], X_mb[:, binary_cols], reduction='none')
+                masked_bce = bce_loss * M_mb[:, binary_cols]
+                total_loss_sum += masked_bce.sum()
+            total_observed = M_mb.sum() + 1e-8
+            MSE_loss = total_loss_sum / total_observed
             G_loss = G_loss_temp + alpha * MSE_loss
             G_loss.backward()
             torch.nn.utils.clip_grad_norm_(netG.parameters(), max_norm=1.0)

@@ -14,6 +14,8 @@ from scipy import stats
 
 # Configuration
 POSSIBLE_DATA_DIRS = [
+    '/Users/nazu.ds/Documents/Research Collections/Research 2025/survival-vae',
+    '/Users/nazu.ds/Documents/Research Collections/Research 2025/Survival-VAE_study',
     './datasets',
     'datasets',
     '../datasets',
