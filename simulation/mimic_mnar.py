@@ -8,22 +8,7 @@ import numpy as np
 import os
 
 # Configuration
-POSSIBLE_DATA_DIRS = [
-    '/Users/nazu.ds/Documents/Research Collections/Research 2025/datasets',
-    '/Users/azmannads/VAE/datasets',  # User's Mac Mini path
-    os.path.abspath(os.path.join(os.path.dirname(__file__), '../datasets'))  # Relative path
-]
-
-DATA_DIR = None
-for path in POSSIBLE_DATA_DIRS:
-    if os.path.exists(path):
-        DATA_DIR = path
-        break
-
-if DATA_DIR is None:
-    # Default fallback
-    DATA_DIR = '/Users/azmannads/Documents/Research collections/Research 2025/datasets'
-    print(f"Warning: Could not find datasets. Defaulting to: {DATA_DIR}")
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
 
 INPUT_FILE = os.path.join(DATA_DIR, 'final/mimic_sepsis_highdim.csv')
 OUTPUT_DIR = DATA_DIR
