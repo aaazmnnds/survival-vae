@@ -353,7 +353,9 @@ def train_eval_xgboost(data, params, eval_times, t_med):
         'colsample_bytree': colsample_bytree,
         'seed': 42,
         'tree_method': 'hist',
-        'device': 'cuda' if torch.cuda.is_available() else 'cpu'
+        'device': 'cuda' if torch.cuda.is_available() else 'cpu',
+        'min_child_weight': 5,
+        'gamma': 1
     }
     bst = xgb.train(xgb_params, dtrain, num_boost_round=n_estimators)
 

@@ -5,8 +5,15 @@ import os
 import numpy as np
 
 # Configuration
-DATA_DIR = '/Users/nazu.ds/Documents/Documents - nazu.ds/Research Collections/Research 2025/Survival-VAE_study/final/optuna_results_final/fold_0/'
-OUTPUT_DIR = '/Users/nazu.ds/Documents/Documents - nazu.ds/Research Collections/Research 2025/JBI_Submission_Package/plots/'
+DATA_DIR = os.environ.get(
+    'SVAE_RESULTS_DIR',
+    '/Users/nazu.ds/Documents/Research Collections/Research 2025/survival-vae/final'
+)
+OPTUNA_DIR = os.path.join(DATA_DIR, 'optuna_results_final', 'fold_0')
+OUTPUT_DIR = os.environ.get(
+    'SVAE_OUTPUT_DIR',
+    '/Users/nazu.ds/Documents/Research Collections/Research 2025/Scientific_Reports_Submission'
+)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 METHODS = ['mice', 'missforest', 'gain', 'mida', 'standard_vae']
@@ -37,7 +44,7 @@ def process_baselines_split():
                 ax = axes[row_idx, col_idx]
                 
                 filename = f"{ds}_{sc}_optuna_{method}_results.csv"
-                path = os.path.join(DATA_DIR, filename)
+                path = os.path.join(OPTUNA_DIR, filename)
                 
                 if not os.path.exists(path):
                     ax.set_visible(False)

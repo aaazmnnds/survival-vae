@@ -181,7 +181,10 @@ def objective(trial, data):
             'max_depth': max_depth,
             'subsample': subsample,
             'colsample_bytree': colsample_bytree,
-            'seed': 42
+            'seed': 42,
+            'tree_method': 'hist',
+            'min_child_weight': 5,
+            'gamma': 1
         }
         bst = xgb.train(params, dtrain, num_boost_round=n_estimators,
                         verbose_eval=False)

@@ -4,8 +4,16 @@ import numpy as np
 import os
 
 # Configuration
-DATA_DIR = '/Users/nazu.ds/Documents/Documents - nazu.ds/Research Collections/Research 2025/Survival-VAE_study/final/optuna_results_final/fold_0/'
-OUTPUT_DIR = '/Users/nazu.ds/Documents/Documents - nazu.ds/Research Collections/Research 2025/JBI_Submission_Package/plots/'
+DATA_DIR = os.environ.get(
+    'SVAE_RESULTS_DIR',
+    '/Users/nazu.ds/Documents/Research Collections/Research 2025/survival-vae/final'
+)
+OPTUNA_DIR = os.path.join(DATA_DIR, 'optuna_results_final', 'fold_0')
+
+OUTPUT_DIR = os.environ.get(
+    'SVAE_OUTPUT_DIR',
+    '/Users/nazu.ds/Documents/Research Collections/Research 2025/Scientific_Reports_Submission'
+)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 DATASETS = ['metabric', 'mimic']
@@ -31,7 +39,7 @@ def process_and_plot():
         for c, sc in enumerate(SCENARIOS):
             ax = axes[r, c]
             filename = f"{ds}_{sc}_optuna_survival_vae_results.csv"
-            path = os.path.join(DATA_DIR, filename)
+            path = os.path.join(OPTUNA_DIR, filename)
             
             if not os.path.exists(path):
                 ax.set_visible(False)

@@ -95,7 +95,7 @@ def objective(trial, dataset_data):
         imputer.fit(X_train)
         X_val_imputed_all = imputer.transform(X_val_input)
         
-        X_val_imputed = X_val_imputed_all[:, :len(feature_cols)]
+        X_val_imputed = np.clip(X_val_imputed_all[:, :len(feature_cols)], 0, 1)
         
         artificial_idx = mask_val_artificial == 1
         if np.sum(artificial_idx) == 0: return 1.0

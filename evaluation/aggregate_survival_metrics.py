@@ -13,15 +13,18 @@ import pandas as pd
 
 # Configuration
 POSSIBLE_DATA_DIRS = [
+    os.environ.get('SVAE_RESULTS_DIR', ''),
+    '/Users/nazu.ds/Documents/Research Collections/Research 2025/survival-vae',
     './datasets', 'datasets', '../datasets',
     '/home/azman/VAE/Survival-VAE_study',
     '/Users/azmannads/VAE/Survival-VAE_study',
+    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
     '.'
 ]
 
 def find_dir(possibilities, default_name):
     for p in possibilities:
-        if os.path.exists(p): return p
+        if p and os.path.exists(p): return p
     return default_name
 
 DATA_DIR = find_dir(POSSIBLE_DATA_DIRS, 'datasets')
@@ -29,7 +32,7 @@ DATA_DIR = find_dir(POSSIBLE_DATA_DIRS, 'datasets')
 DATASETS = ['METABRIC', 'MIMIC']
 SCENARIOS = ['light', 'moderate', 'severe']
 METHODS = ['survival_vae', 'standard_vae', 'mice', 'missforest', 'gain', 'mida']
-MODELS = ['RSF', 'XGBOOST', 'DEEPSURV', 'DEEPHIT']
+MODELS = ['rsf', 'xgb', 'deepsurv', 'deephit']
 
 def calculate_mean_sd(values):
     arr = np.array([v for v in values if not np.isnan(v)])
@@ -39,7 +42,7 @@ def calculate_mean_sd(values):
 def load_all_folds():
     all_dfs = []
     for fold_idx in range(5):
-        path = os.path.join(DATA_DIR, 'final', 'survival_results', 'metrics', f'fold_{fold_idx}', 'survival_metrics.csv')
+        path = os.path.join(DATA_DIR, 'final', 'survival_results', f'fold_{fold_idx}', 'results_survival_fold.csv')
         if os.path.exists(path):
             df = pd.read_csv(path)
             all_dfs.append(df)
@@ -53,15 +56,27 @@ def generate_main_table(df, output_path):
     # Group by all dimensions
     groups = df.groupby(['Dataset', 'Scenario', 'Method', 'Model'])
     for (dataset, scenario, method, model), g in groups:
-        c_mean, c_sd = calculate_mean_sd(g['C-index'])
-        b_mean, b_sd = calculate_mean_sd(g['Brier'])
+        c_mean, c_sd = calculate_mean_sd(g['C_Index'])
+        ibs_mean, ibs_sd = calculate_mean_sd(g['IBS'])
+        iauc_mean, iauc_sd = calculate_mean_sd(g['iAUC'])
+        auctmed_mean, auctmed_sd = calculate_mean_sd(g['AUC_tmed'])
+        iauc_mean, iauc_sd = calculate_mean_sd(g['iAUC'])
+        auctmed_mean, auctmed_sd = calculate_mean_sd(g['AUC_tmed'])
         
         rows.append({
             'Dataset': dataset, 'Scenario': scenario, 'Method': method, 'Model': model,
-            'C-index': f"{c_mean:.4f} ({c_sd:.4f})" if not np.isnan(c_mean) else 'N/A',
+            'C_Index': f"{c_mean:.4f} ({c_sd:.4f})" if not np.isnan(c_mean) else 'N/A',
             'C_Mean': round(c_mean, 4), 'C_SD': round(c_sd, 4),
-            'Brier': f"{b_mean:.4f} ({b_sd:.4f})" if not np.isnan(b_mean) else 'N/A',
-            'Brier_Mean': round(b_mean, 4), 'Brier_SD': round(b_sd, 4)
+            'IBS': f"{ibs_mean:.4f} ({ibs_sd:.4f})" if not np.isnan(ibs_mean) else 'N/A',
+            'IBS_Mean': round(ibs_mean, 4), 'IBS_SD': round(ibs_sd, 4),
+            'iAUC': f"{iauc_mean:.4f} ({iauc_sd:.4f})" if not np.isnan(iauc_mean) else 'N/A',
+            'iAUC_Mean': round(iauc_mean, 4), 'iAUC_SD': round(iauc_sd, 4),
+            'AUC_tmed': f"{auctmed_mean:.4f} ({auctmed_sd:.4f})" if not np.isnan(auctmed_mean) else 'N/A',
+            'AUC_tmed_Mean': round(auctmed_mean, 4), 'AUC_tmed_SD': round(auctmed_sd, 4),
+            'iAUC': f"{iauc_mean:.4f} ({iauc_sd:.4f})" if not np.isnan(iauc_mean) else 'N/A',
+            'iAUC_Mean': round(iauc_mean, 4), 'iAUC_SD': round(iauc_sd, 4),
+            'AUC_tmed': f"{auctmed_mean:.4f} ({auctmed_sd:.4f})" if not np.isnan(auctmed_mean) else 'N/A',
+            'AUC_tmed_Mean': round(auctmed_mean, 4), 'AUC_tmed_SD': round(auctmed_sd, 4),
         })
     
     res_df = pd.DataFrame(rows)
@@ -71,7 +86,7 @@ def generate_main_table(df, output_path):
 
 def generate_latex_utility_table(df, dataset, model, output_path):
     """Generates a table for a specific Model+Dataset across all scenarios and methods."""
-    target_df = df[(df['Dataset'] == dataset.upper()) & (df['Model'] == model.upper())]
+    target_df = df[(df['Dataset'] == dataset.upper()) & (df['Model'] == model.lower())]
     if target_df.empty: return
 
     method_order = ['survival_vae', 'standard_vae', 'mice', 'missforest', 'gain', 'mida']
@@ -118,7 +133,7 @@ def main():
     
     print("\nGenerating LaTeX Utility Tables...")
     for ds in ['METABRIC', 'MIMIC']:
-        for mod in ['RSF', 'XGBOOST', 'DEEPSURV', 'DEEPHIT']:
+        for mod in ['rsf', 'xgb', 'deepsurv', 'deephit']:
             path = os.path.join(output_dir, f'latex_utility_{ds}_{mod}.tex')
             generate_latex_utility_table(main_df, ds, mod, path)
     

@@ -283,7 +283,7 @@ def impute_dataset(model, data_path, train_idx, mask_path, output_path):
 # ============================================================================
 # 5. TRAINING LOOP
 # ============================================================================
-def train_model(dataset_path, train_idx, mask_path=None, epochs=50, latent_dim=10, beta=1.0, gamma=1.0, lr=1e-3):
+def train_model(dataset_path, train_idx, mask_path=None, epochs=50, latent_dim=10, beta=1.0, gamma=1.0, lr=1e-3, binary_feature_indices=None):
     """
     beta: Weight for KL Divergence (default 1.0)
     gamma: Weight for Survival Loss (default 1.0)
@@ -375,7 +375,7 @@ def run_survival_vae_pipeline(dataset_name, severity, fold_idx):
         'datasets',
         '../datasets',
         '/home/azman/VAE/Survival-VAE_study',
-        '/Users/azmannads/VAE/Survival-VAE_study',
+        '/Users/azmannads/VAE 2/Survival-VAE_study',
         '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
         '.'
     ]
@@ -443,7 +443,21 @@ def run_survival_vae_pipeline(dataset_name, severity, fold_idx):
         print(f"  Warning: Optuna file not found. Using defaults.")
     
     # 2. Train model
-    model = train_model(mnar_path, train_idx, mask_path, epochs=epochs, latent_dim=latent_dim, beta=beta, gamma=gamma, lr=lr)
+    temp_df = pd.read_csv(mnar_path, nrows=0)
+    drop_cols = ['subject_id', 'hadm_id', 'stay_id', 'patient_id', 'Survival_in_days', 'Status', 'duration', 'event', 'Time', 'Event']
+    feature_cols = [c for c in temp_df.columns if c not in drop_cols]
+    
+    KNOWN_BINARY_FEATURES = [
+        'Hormone_Tx', 'Radiotherapy', 'Chemotherapy', 'ER_Positive',
+        'Sex', 'CCI_MI', 'CCI_CHF', 'CCI_PVD', 'CCI_Stroke',
+        'CCI_Renal', 'CCI_Liver', 'CCI_Cancer'
+    ]
+    binary_feature_indices = [
+        i for i, col in enumerate(feature_cols)
+        if col in KNOWN_BINARY_FEATURES
+    ]
+    
+    model = train_model(mnar_path, train_idx, mask_path, epochs=epochs, latent_dim=latent_dim, beta=beta, gamma=gamma, lr=lr, binary_feature_indices=binary_feature_indices)
     model.to(device)
     
     # 3. Generate imputed dataset

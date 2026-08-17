@@ -144,7 +144,8 @@ def run_mice_imputation(dataset_name, severity, fold_idx):
             imputed_array_all = imputer.transform(X_input)
         
         # Extract and Inverse Transform (manual)
-        X_imputed = imputed_array_all * x_scale + x_min
+        X_imputed_clipped = np.clip(imputed_array_all, 0, 1)
+        X_imputed = X_imputed_clipped * x_scale + x_min
         imputed_df = pd.DataFrame(X_imputed, columns=feature_cols)
         
         # Add back targets and IDs

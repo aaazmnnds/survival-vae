@@ -55,46 +55,30 @@ def main():
     imp_df = pd.read_csv(os.path.join(BASE_RESULTS_DIR, 'imputation_metrics', 'aggregated', 'results_imputation_main_table.csv'))
     ml_df = pd.read_csv(os.path.join(BASE_RESULTS_DIR, 'survival_results', 'aggregated', 'results_clinical_utility_main.csv'))
 
-    # Strip existing survival_vae rows to prevent averaging duplicates
-    imp_df = imp_df[imp_df['Method'] != 'survival_vae'].copy()
-    ml_df = ml_df[ml_df['Method'] != 'survival_vae'].copy()
+    # Using true values from the CSV pipeline
 
-    # user dict format: dataset, scenario -> {RMSE, MAE}
-    user_imp = {
-        ('METABRIC', 'light'): {'RMSE': 0.383, 'MAE': 0.270},
-        ('METABRIC', 'moderate'): {'RMSE': 0.440, 'MAE': 0.253},
-        ('METABRIC', 'severe'): {'RMSE': 0.433, 'MAE': 0.253},
-        ('MIMIC', 'light'): {'RMSE': 0.086, 'MAE': 0.051},
-        ('MIMIC', 'moderate'): {'RMSE': 0.086, 'MAE': 0.051},
-        ('MIMIC', 'severe'): {'RMSE': 0.096, 'MAE': 0.058}
-    }
+    # Parse any string formatted "mean (std)" values back into numeric
+    for col in ['C_Index', 'IBS']:
+        if col in ml_df.columns:
+            if ml_df[col].dtype == object:
+                means = []
+                stds = []
+                for val in ml_df[col]:
+                    if isinstance(val, str) and '(' in val:
+                        p1, p2 = val.split('(')
+                        means.append(float(p1.strip()))
+                        stds.append(float(p2.replace(')', '').strip()))
+                    else:
+                        means.append(float(val))
+                        stds.append(0.0)
+                ml_df[col] = means
+                ml_df[f'{col}_std'] = stds
 
-    # user dict format: dataset, scenario -> {C_Index, IBS}
-    user_ml = {
-        ('metabric', 'light'): {'C_Index': 0.636, 'IBS': 0.204},
-        ('metabric', 'moderate'): {'C_Index': 0.620, 'IBS': 0.209},
-        ('metabric', 'severe'): {'C_Index': 0.604, 'IBS': 0.212},
-        ('mimic', 'light'): {'C_Index': 0.863, 'IBS': 0.072},
-        ('mimic', 'moderate'): {'C_Index': 0.818, 'IBS': 0.082},
-        ('mimic', 'severe'): {'C_Index': 0.706, 'IBS': 0.091}
-    }
-
-    for (ds, sc), metrics in user_imp.items():
-        imp_df = inject_synthetic_folds(imp_df, ds, sc, 'survival_vae', metrics)
-
-    for (ds, sc), metrics in user_ml.items():
-        # Inject for rsf, which the plotting scripts rely on for Clinical Utility plots
-        ml_df = inject_ml_synthetic_folds(ml_df, ds, sc, 'survival_vae', 'rsf', metrics)
-
-    # Validate output
-    print("Verifying injected Imputation means:")
-    print(imp_df[imp_df['Method'] == 'survival_vae'].groupby(['Dataset', 'Scenario'])[['RMSE', 'MAE']].mean())
-    print("\nVerifying injected ML means:")
-    print(ml_df[ml_df['Method'] == 'survival_vae'].groupby(['Dataset', 'Scenario'])[['C_Index', 'IBS']].mean())
-
-    # Generate Figures
-    plot_imputation_fidelity_corrected(imp_df, os.path.join(OUTPUT_DIR, "figure_imputation_fidelity.png"))
-    
+    ml_df = ml_df.rename(columns={'C_Index': 'C_Index_mean', 'IBS': 'IBS_mean'})
+    if 'C_Index_std' not in ml_df.columns:
+        ml_df['C_Index_std'] = 0.0
+    if 'IBS_std' not in ml_df.columns:
+        ml_df['IBS_std'] = 0.0
     plot_clinical_utility_corrected(ml_df, os.path.join(OUTPUT_DIR, "figure_clinical_utility.png"))
 
 if __name__ == '__main__':
