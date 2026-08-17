@@ -12,8 +12,8 @@ from pathlib import Path
 warnings.filterwarnings('ignore')
 
 # --- Configuration ---
-MIMIC_PATH = '/Users/nazu.ds/Documents/Research Collections/Dr. Zhang/mimic-iv-2.2/'
-OUTPUT_PATH = '/Users/nazu.ds/Documents/Research Collections/Research 2025/datasets'
+MIMIC_PATH = os.environ.get('MIMIC_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets', 'mimic_iv'))
+OUTPUT_PATH = os.environ.get('OUTPUT_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
 INTERMEDIATE_PATH = os.path.join(OUTPUT_PATH, 'intermediate')
 FINAL_PATH = os.path.join(OUTPUT_PATH, 'final')
 

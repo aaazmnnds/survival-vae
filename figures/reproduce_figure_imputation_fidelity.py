@@ -4,8 +4,12 @@ import numpy as np
 import os
 
 # Configuration
-CSV_PATH = '/Users/nazu.ds/Documents/Documents - nazu.ds/Research Collections/Research 2025/Survival-VAE_study/final/imputation_metrics/aggregated/results_imputation_main_table.csv'
-OUTPUT_PATH = '/Users/nazu.ds/Documents/Documents - nazu.ds/Research Collections/Research 2025/JBI_Submission_Package/figure_imputation_fidelity.png'
+BASE_RESULTS_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'final'))
+OUTPUT_DIR = os.environ.get('SVAE_OUTPUT_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'output'))
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+CSV_PATH = os.path.join(BASE_RESULTS_DIR, 'imputation_metrics', 'aggregated', 'results_imputation_main_table.csv')
+OUTPUT_PATH = os.path.join(OUTPUT_DIR, 'figure_imputation_fidelity.png')
 
 # Load data
 df = pd.read_csv(CSV_PATH)

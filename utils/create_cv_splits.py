@@ -19,23 +19,7 @@ import json
 import os
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-POSSIBLE_DATA_DIRS = [
-    './datasets',
-    'datasets',
-    '../datasets',
-    '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
-    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
-    '.'
-]
-
-def find_dir(possibilities):
-    for p in possibilities:
-        if os.path.exists(p):
-            return p
-    raise FileNotFoundError("Could not find datasets directory.")
-
-DATA_DIR = find_dir(POSSIBLE_DATA_DIRS)
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
 
 DATASETS = {
     'metabric': {

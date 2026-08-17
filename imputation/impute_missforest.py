@@ -15,25 +15,7 @@ import json
 import warnings
 
 # Configuration
-POSSIBLE_DATA_DIRS = [
-    './datasets',
-    'datasets',
-    '../datasets',
-    '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
-    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
-    '.'
-]
-
-# Optuna results are now standardized within the study folder structure
-
-def find_dir(possibilities, default_name):
-    for p in possibilities:
-        if os.path.exists(p):
-            return p
-    return default_name
-
-DATA_DIR = find_dir(POSSIBLE_DATA_DIRS, 'datasets')
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
 # RESULTS_DIR will be set dynamically per fold
 
 # Default missForest settings

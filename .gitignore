@@ -47,3 +47,14 @@ __pycache__/
 .DS_Store
 *.db
 optuna_studies/
+
+# Diagnostic scripts
+check_anomalies.py
+check_real_anomalies.py
+format_all_tables.py
+format_table.py
+parse_all.py
+parse_ml.py
+test_load.py
+verify_csv.py
+evaluation/test_lifelines.py

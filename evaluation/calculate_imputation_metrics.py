@@ -11,25 +11,8 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 import argparse
 
 # Configuration
-POSSIBLE_DATA_DIRS = [
-    './datasets',
-    'datasets',
-    '../datasets',
-    '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE/Survival-VAE_study',
-    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
-    '.'
-]
-
-def find_dir(possibilities, default_name):
-    for p in possibilities:
-        if os.path.exists(p):
-            return p
-    return default_name
-
-# Global path setup (will be finalized in main with argparse items)
-DATA_DIR = find_dir(POSSIBLE_DATA_DIRS, 'datasets')
-BASE_RESULTS_DIR = '/Users/nazu.ds/Documents/Research Collections/Research 2025/survival-vae'
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
+BASE_RESULTS_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 # Dataset Config
 DATASETS = {

@@ -17,25 +17,7 @@ from sklearn.preprocessing import MinMaxScaler
 warnings.filterwarnings("ignore")
 
 # Configuration
-POSSIBLE_DATA_DIRS = [
-    './datasets',
-    'datasets',
-    '../datasets',
-    '/home/azman/VAE/Survival-VAE_study',
-    '/Users/azmannads/VAE 2/Survival-VAE_study',
-    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
-    '.'
-]
-
-DATA_DIR = None
-for p in POSSIBLE_DATA_DIRS:
-    if os.path.exists(p):
-        DATA_DIR = p
-        break
-
-if DATA_DIR is None:
-    DATA_DIR = 'datasets'
-    print(f"Warning: Could not find datasets directory. Defaulting to: {DATA_DIR}")
+DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
 
 def find_truth_file(dataset_name):
     if dataset_name == 'metabric':
