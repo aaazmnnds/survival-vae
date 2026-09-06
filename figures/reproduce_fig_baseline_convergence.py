@@ -37,7 +37,7 @@ def process_baselines_split():
             for col_idx, method in enumerate(METHODS):
                 ax = axes[row_idx, col_idx]
                 
-                filename = f"{ds}_{sc}_optuna_{method}_results.csv"
+                filename = f"{ds}_{sc}_optuna_{method}_results_300trials.csv"
                 path = os.path.join(OPTUNA_DIR, filename)
                 
                 if not os.path.exists(path):

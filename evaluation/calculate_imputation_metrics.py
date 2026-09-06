@@ -1,336 +1,304 @@
-"""
-Calculates normalized RMSE and MAE on held-out test fold artificially masked entries per CV fold.
-"""
-
-import pandas as pd
-import numpy as np
 import os
-import json
-import glob
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 import argparse
+import json
+import time
+import optuna
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+import numpy as np
+import pandas as pd
+import warnings
+from sklearn.preprocessing import MinMaxScaler
+
+# Silence all scikit-learn and convergence warnings to prevent log explosion
+warnings.filterwarnings("ignore")
 
 # Configuration
 DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
-BASE_RESULTS_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-# Dataset Config
-DATASETS = {
-    'METABRIC': {
-        'truth': 'metabric_processed.csv',
-        'mask_prefix': 'metabric_mask',
-        'cv_splits': 'cv_splits_metabric.json'
-    },
-    'MIMIC': {
-        'truth': 'mimic_sepsis_highdim.csv', 
-        'mask_prefix': 'mimic_mask',
-        'cv_splits': 'cv_splits_mimic.json'
-    }
-}
-
-SCENARIOS = ['light', 'moderate', 'severe']
-METHODS = ['standard_vae', 'mice', 'missforest', 'gain', 'mida', 'survival_vae']
-
-def find_truth_file(dataset_name, base_dir):
-    if dataset_name.upper() == 'METABRIC':
-        candidates = [
-            os.path.join(base_dir, 'metabric_processed.csv'),
-            os.path.join(base_dir, 'metabric.csv')
-        ]
-    elif dataset_name.upper() == 'MIMIC':
-        candidates = [
-            os.path.join(base_dir, 'final/mimic_sepsis_highdim.csv'),
-            os.path.join(base_dir, 'mimic_sepsis_highdim.csv'),
-            os.path.join(base_dir, 'mimic_processed.csv')
-        ]
+def find_truth_file(dataset_name):
+    if dataset_name == 'metabric':
+        filenames = ['metabric_processed.csv', 'metabric.csv']
     else:
-        return None
+        filenames = ['mimic_sepsis_highdim.csv', 'mimic_processed.csv', 'mimic.csv']
     
-    for path in candidates:
-        if os.path.exists(path):
-            return path
+    search_dirs = [
+        DATA_DIR,
+        os.path.join(DATA_DIR, 'final'),
+        os.path.join(DATA_DIR, 'raw'),
+        os.path.dirname(DATA_DIR),
+        os.path.join(os.path.dirname(DATA_DIR), 'final'),
+        os.path.join(os.path.dirname(DATA_DIR), 'raw'),
+        os.path.join(os.path.dirname(DATA_DIR), 'data'),
+        '.',
+        './final',
+        '../datasets',
+        '../datasets/final'
+    ]
+    
+    for d in search_dirs:
+        for f in filenames:
+            full_path = os.path.join(d, f)
+            if os.path.exists(full_path):
+                return full_path
     return None
 
+SPLIT_FILES = {
+    'metabric': 'cv_splits_metabric.json',
+    'mimic': 'cv_splits_mimic.json'
+}
 
-def load_cv_splits(split_file):
-    with open(os.path.join(DATA_DIR, split_file), 'r') as f:
-        return json.load(f)
+DATASETS = ['metabric', 'mimic']
+SCENARIOS = ['light', 'moderate', 'severe']
 
-def verify_fold_data(dataset_name, cv_data, ground_truth_df):
-    """Verify that fold indices are valid and data is consistent"""
-    print(f"\n[VERIFICATION] {dataset_name}")
-    print("-"*60)
-    
-    n_samples = len(ground_truth_df)
-    print(f"Total samples in dataset: {n_samples}")
-    
-    total_test_samples = 0
-    all_test_indices = set()
-    
-    # Map fold_1..5 to 0..4
-    for i in range(1, 6):
-        fold_key = f'fold_{i}'
-        if fold_key not in cv_data:
-            print(f"  Warning: Missing {fold_key} in CV data")
-            continue
-            
-        test_indices = cv_data[fold_key]['test']
-        
-        # Check indices are in range
-        if max(test_indices) >= n_samples:
-             print(f"  Warning: Fold {fold_key}: indices exceed dataset size! Max index: {max(test_indices)}")
-        
-        # Check for overlap
-        current_indices_set = set(test_indices)
-        overlap = all_test_indices & current_indices_set
-        if len(overlap) > 0:
-            print(f"  Warning: Fold {fold_key}: {len(overlap)} overlapping indices with previous folds!")
-            
-        all_test_indices.update(current_indices_set)
-        total_test_samples += len(test_indices)
-        print(f"  Fold {i-1} ({fold_key}): {len(test_indices)} test samples [DONE]")
-    
-    print(f"  Total test samples across folds: {total_test_samples}")
-    print(f"  Expected (N): {n_samples}")
-    if total_test_samples != n_samples:
-         print(f"  Warning: Total test samples ({total_test_samples}) != Dataset size ({n_samples})")
-    print()
+def load_split_indices(dataset_name, fold_idx=0):
+    split_file = os.path.join(DATA_DIR, SPLIT_FILES[dataset_name])
+    with open(split_file, 'r') as f:
+        splits = json.load(f)
+    fold_key = f"fold_{fold_idx+1}"
+    return splits[fold_key]['train'], splits[fold_key]['val']
 
-def calculate_metrics_on_indices(truth_df, imputed_df, mask_df, indices):
-    """Calculates RMSE and MAE on specific indices (masked values only)."""
-    
-    # Extract subsets
-    truth_sub = truth_df.iloc[indices]
-    imp_sub = imputed_df.iloc[indices]
-    mask_sub = mask_df.iloc[indices]
-    
-    all_y_true = []
-    all_y_imp = []
-    
-    common_cols = [c for c in truth_sub.columns if c in imp_sub.columns and c in mask_sub.columns]
-    
-    for col in common_cols:
-        if not pd.api.types.is_numeric_dtype(truth_sub[col]):
-            continue
-            
-        # Handle Boolean strings or 0/1 in mask
-        if mask_sub[col].dtype == object:
-            mask_vals = mask_sub[col].astype(str).str.lower() == 'true'
-        else:
-            mask_vals = mask_sub[col].astype(bool)
-            
-        # Target: Observed in Truth AND Missing in Mask (artificially removed)
-        # Note: imputation logic usually keeps observed values, but we check mask just in case
-        target_mask = (truth_sub[col].notna()) & (mask_vals == True)
+class StandardVAE(nn.Module):
+    def __init__(self, input_dim, latent_dim=10):
+        super(StandardVAE, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim * 2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU()
+        )
+        self.fc_mu = nn.Linear(32, latent_dim)
+        self.fc_logvar = nn.Linear(32, latent_dim)
         
-        if target_mask.sum() == 0:
-            continue
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, 64),
+            nn.ReLU(),
+            nn.Linear(64, input_dim),
+            nn.Sigmoid()
+        )
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x, m):
+        h = self.encoder(torch.cat([x, m], dim=1))
+        mu = self.fc_mu(h)
+        logvar = self.fc_logvar(h)
+        z = self.reparameterize(mu, logvar)
+        return self.decoder(z), mu, logvar
+
+def objective(trial, dataset_data):
+    try:
+        # 1. Hyperparameters
+        beta = trial.suggest_float("beta", 1e-4, 1e-1, log=True)
+        lr = trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True)
+        latent_dim = trial.suggest_int("latent_dim", 8, 32)
+        epochs = trial.suggest_int("epochs", 50, 150)
+        batch_size = 512
+        
+        # Unpack pre-loaded data
+        (X_in_all, M_in_all, X_truth_scaled, mask_art, train_idx, val_idx, feature_cols, binary_feature_indices) = dataset_data
+        
+        dim_all = X_in_all.shape[1]
+        X_train, M_train = X_in_all[train_idx], M_in_all[train_idx]
+        
+        X_val_truth_scaled = X_truth_scaled[val_idx]
+        mask_val_art = mask_art[val_idx]
+        
+        # 3. Model
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = StandardVAE(dim_all, latent_dim).to(device)
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+        
+        train_ds = TensorDataset(torch.FloatTensor(X_train), torch.FloatTensor(M_train))
+        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+        
+        # 4. Training
+        model.train()
+        for epoch in range(epochs):
+            for x_mb, m_mb in train_loader:
+                x_mb, m_mb = x_mb.to(device), m_mb.to(device)
+                optimizer.zero_grad()
+                recon, mu, logvar = model(x_mb, m_mb)
+                num_features = x_mb.shape[1]
+                binary_cols = binary_feature_indices if binary_feature_indices is not None else []
+                cont_cols = [i for i in range(num_features) if i not in binary_cols]
+                total_loss_sum = 0.0
+                if len(cont_cols) > 0:
+                    mse_loss = F.mse_loss(recon[:, cont_cols], x_mb[:, cont_cols], reduction='none')
+                    masked_mse = mse_loss * m_mb[:, cont_cols]
+                    total_loss_sum += masked_mse.sum()
+                if len(binary_cols) > 0:
+                    bce_loss = F.binary_cross_entropy(recon[:, binary_cols], x_mb[:, binary_cols], reduction='none')
+                    masked_bce = bce_loss * m_mb[:, binary_cols]
+                    total_loss_sum += masked_bce.sum()
+                total_observed = m_mb.sum() + 1e-8
+                recon_loss = total_loss_sum / total_observed
+                kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
+                loss = recon_loss + beta * kl_loss
+                loss.backward()
+                optimizer.step()
+                
+        # 5. Evaluate
+        model.eval()
+        with torch.no_grad():
+            X_val_torch = torch.FloatTensor(X_in_all[val_idx]).to(device)
+            M_val_torch = torch.FloatTensor(M_in_all[val_idx]).to(device)
+            recon_val, _, _ = model(X_val_torch, M_val_torch)
+            recon_val = recon_val.cpu().numpy()
             
-        y_true = truth_sub.loc[target_mask, col].values
-        y_imp = imp_sub.loc[target_mask, col].values
+            recon_feat = recon_val[:, :len(feature_cols)]
+            X_val_feat = X_in_all[val_idx, :len(feature_cols)]
+            M_val_feat = M_in_all[val_idx, :len(feature_cols)]
+            X_val_imputed = M_val_feat * X_val_feat + (1 - M_val_feat) * recon_feat
+            
+            artificial_idx = mask_val_art == 1
+            if np.sum(artificial_idx) == 0: return 1.0
+            
+            mse = (X_val_imputed[artificial_idx] - X_val_truth_scaled[artificial_idx])**2
+            rmse = np.sqrt(np.mean(mse))
+            
+            return rmse if not np.isnan(rmse) else 1.0
+    except Exception as e:
+        print(f"Trial {trial.number} failed: {e}")
+        return 1.0
+
+def save_callback(study, trial, output_path):
+    """Callback to save results after every trial (checkpointing)."""
+    df_results = study.trials_dataframe()
+    if df_results.empty:
+        return
         
-        all_y_true.extend(y_true)
-        all_y_imp.extend(y_imp)
+    cols = ['number'] + [c for c in df_results.columns if c.startswith('params_')] + ['value']
+    df_results = df_results[cols].sort_values('value')
+    df_results.columns = [c.replace('params_', '') if c.startswith('params_') else c for c in df_results.columns]
+    df_results = df_results.rename(columns={'number': 'trial', 'value': 'rmse_norm'})
+    
+    df_results.to_csv(output_path, index=False)
+    print(f" [Checkpoint] Saved trial {trial.number} results to {output_path}")
+
+def prepare_data(dataset_name, scenario, fold_idx):
+    """Load and preprocess data once."""
+    mnar_path = os.path.join(DATA_DIR, f'{dataset_name}_mnar_{scenario}.csv')
+    truth_path = find_truth_file(dataset_name)
+    mask_path = os.path.join(DATA_DIR, f'{dataset_name}_mask_{scenario}.csv')
+    
+    if not truth_path or not os.path.exists(truth_path):
+        raise FileNotFoundError(f"Truth file for {dataset_name} not found in {DATA_DIR}")
         
-    if len(all_y_true) > 0:
-        rmse = np.sqrt(mean_squared_error(all_y_true, all_y_imp))
-        mae = mean_absolute_error(all_y_true, all_y_imp)
-        n_masked = len(all_y_true)
+    df_mnar = pd.read_csv(mnar_path)
+    df_truth = pd.read_csv(truth_path)
+    df_mask = pd.read_csv(mask_path)
+    
+    if 'Sex' in df_mnar.columns:
+        for df in [df_mnar, df_truth]:
+            df['Sex'] = df['Sex'].map({'F': 0, 'M': 1, 'Female': 0, 'Male': 1})
+    
+    if 'Survival_in_days' in df_mnar.columns:
+        target_cols = ['Survival_in_days', 'Status']
+    elif 'duration' in df_mnar.columns:
+        target_cols = ['duration', 'event']
     else:
-        rmse, mae, n_masked = np.nan, np.nan, 0
-        
-    return rmse, mae, n_masked
+        target_cols = ['Time', 'Event']
 
-def calculate_mice_metrics_for_fold(fold_test_indices, imputed_dfs_list, mask_df, truth_df):
-    """
-    Calculate MICE metrics for one fold using all 5 imputations.
-    Averages metrics across the 5 imputations (Rubin's rules for point estimates).
-    """
-    rmse_list = []
-    mae_list = []
-    total_masked = 0
+    id_cols = ['hadm_id', 'subject_id', 'stay_id', 'icustay_id', 'patient_id', 'admittime', 'dischtime']
+    cols_to_drop = [col for col in id_cols if col in df_mnar.columns]
     
-    for imputed_df in imputed_dfs_list:
-        rmse, mae, n_masked = calculate_metrics_on_indices(truth_df, imputed_df, mask_df, fold_test_indices)
-        
-        if not np.isnan(rmse):
-            rmse_list.append(rmse)
-            mae_list.append(mae)
-            total_masked = n_masked # Should be same for all imputations
-            
-    if not rmse_list:
-        return np.nan, np.nan, 0
-        
-    # Average across imputations
-    avg_rmse = np.mean(rmse_list)
-    avg_mae = np.mean(mae_list)
+    feature_df_mnar = df_mnar.drop(columns=cols_to_drop + target_cols).select_dtypes(include=[np.number])
+    feature_cols = feature_df_mnar.columns
     
-    return avg_rmse, avg_mae, total_masked
+    X_mnar = feature_df_mnar.values
+    X_truth = df_truth[feature_cols].values
+    mask_art = df_mask[feature_cols].values.astype(float)
+    
+    T_E_mnar = df_mnar[target_cols].values
+    
+    train_idx, val_idx = load_split_indices(dataset_name, fold_idx=fold_idx)
+    
+    scaler_x = MinMaxScaler()
+    X_mnar_scaled = np.zeros_like(X_mnar, dtype=float)
+    X_mnar_scaled[train_idx] = scaler_x.fit_transform(X_mnar[train_idx])
+    X_mnar_scaled[val_idx] = scaler_x.transform(X_mnar[val_idx])
+    X_truth_scaled = scaler_x.transform(X_truth)
+    
+    M_obs = 1. - np.isnan(X_mnar_scaled)
+    X_filled = np.nan_to_num(X_mnar_scaled, nan=0.5)
+    
+    scaler_te = MinMaxScaler()
+    TE_mnar_scaled = np.zeros_like(T_E_mnar, dtype=float)
+    TE_mnar_scaled[train_idx] = scaler_te.fit_transform(T_E_mnar[train_idx])
+    TE_mnar_scaled[val_idx] = scaler_te.transform(T_E_mnar[val_idx])
+    
+    X_in_all = np.concatenate([X_filled, TE_mnar_scaled], axis=1)
+    M_in_all = np.concatenate([M_obs, np.ones_like(TE_mnar_scaled)], axis=1)
+    
+    KNOWN_BINARY_FEATURES = [
+        'Hormone_Tx', 'Radiotherapy', 'Chemotherapy', 'ER_Positive',
+        'Sex', 'CCI_MI', 'CCI_CHF', 'CCI_PVD', 'CCI_Stroke',
+        'CCI_Renal', 'CCI_Liver', 'CCI_Cancer'
+    ]
+    binary_feature_indices = [
+        i for i, col in enumerate(feature_cols)
+        if col in KNOWN_BINARY_FEATURES
+    ]
+    return (X_in_all, M_in_all, X_truth_scaled, mask_art, train_idx, val_idx, feature_cols, binary_feature_indices)
 
-def generate_summary_table(results_df, output_path):
-    """Generate summary statistics (mean ± std across folds)"""
-    summary = results_df.groupby(['Dataset', 'Scenario', 'Method']).agg({
-        'RMSE': ['mean', 'std'],
-        'MAE': ['mean', 'std']
-    }).round(4)
+def run_study(dataset, scenario, n_trials=100, fold_idx=0, suffix_str=""):
+    study_name = f"standard_vae_{dataset}_{scenario}_fold{fold_idx}{suffix_str}"
+    os.makedirs(f"final/optuna_results_final/fold_{fold_idx}", exist_ok=True)
+    output_path = f"final/optuna_results_final/fold_{fold_idx}/{dataset}_{scenario}_optuna_standard_vae_results{suffix_str}.csv"
     
-    summary.columns = ['_'.join(col).strip() for col in summary.columns.values]
-    summary.to_csv(output_path)
-    print(f"Saved summary statistics to {output_path}")
-    return summary
-
-def main():
-    parser = argparse.ArgumentParser(description='Calculate imputation metrics for a specific fold.')
-    parser.add_argument('--fold', type=int, required=True, choices=[0,1,2,3,4], help='CV fold index (0-4)')
-    args = parser.parse_args()
+    # Pre-load data once per run_study
+    print(f"Loading data for {dataset}...")
+    dataset_data = prepare_data(dataset, scenario, fold_idx)
     
-    # Finalize paths
-    RESULTS_DIR = os.path.join(BASE_RESULTS_DIR, 'final', 'imputation_metrics', f'fold_{args.fold}')
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    OUTPUT_FILE = os.path.join(RESULTS_DIR, 'results_imputation_folds.csv')
-    SUMMARY_FILE = os.path.join(RESULTS_DIR, 'results_imputation_summary.csv')
+    # Use SQLite for persistence to allow skipping/resuming
+    storage_name = f"sqlite:///optuna_standard_vae_fold{fold_idx}{suffix_str}.db"
     
-    results = []
+    study = optuna.create_study(
+        study_name=study_name,
+        storage=storage_name,
+        direction="minimize",
+        load_if_exists=True
+    )
     
-    # Import Scaler
-    from sklearn.preprocessing import MinMaxScaler
+    # Check how many trials are already complete
+    completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+    trials_to_run = max(0, n_trials - completed_trials)
     
-    for dataset_name_key, config in DATASETS.items():
-        dataset_slug = dataset_name_key.lower() # metabric
-        dataset_display = dataset_name_key # METABRIC
-        
-        print(f"Processing {dataset_display} Dataset")
-        print("="*60)
-        
-        # Load Ground Truth
-        truth_path = find_truth_file(dataset_display, DATA_DIR)
-        
-        if not truth_path or not os.path.exists(truth_path):
-            print(f"  Error: Ground truth not found for {dataset_display} in {DATA_DIR}")
-            continue
-        print(f"  Using truth file: {truth_path}")
-        df_truth = pd.read_csv(truth_path)
-        
-        # --- NORMALIZATION LOGIC ---
-        # We explicitly normalize specific columns for MIMIC to [0,1] to allow comparison with METABRIC
-        # METABRIC is assumed to be already processed/normalized, but we can re-normalize to be safe/consistent?
-        # User requested: "Normalize to [0,1] using same MinMaxScaler from training" implies using per-fold scaling?
-        # But for reporting imputation error on the whole dataset, a global scaler on the Truth makes sense.
-        # This keeps the "Ground Truth" range as [0,1].
-        
-        feature_cols = [c for c in df_truth.columns if pd.api.types.is_numeric_dtype(df_truth[c]) 
-                       and c not in ['duration', 'event', 'Time', 'Event', 'Survival_in_days', 'Status', 'subject_id', 'hadm_id', 'stay_id', 'admittime', 'dischtime']]
-        
-        # Load CV Splits
-        cv_data = load_cv_splits(config['cv_splits'])
-        
-        # 5. Fix Scaler: Fit on train rows only (NaN-safe)
-        fold_key = f'fold_{args.fold + 1}'
-        train_idx = np.array(cv_data[fold_key]['train'])
-        
-        raw_vals = df_truth[feature_cols].values
-        data_min = np.nanmin(raw_vals[train_idx], axis=0)
-        data_max = np.nanmax(raw_vals[train_idx], axis=0)
-        data_range = data_max - data_min
-        data_range[data_range == 0] = 1.0
-        
-        data_min_s = pd.Series(data_min, index=feature_cols)
-        data_range_s = pd.Series(data_range, index=feature_cols)
-        
-        def normalize_df(df_target):
-            df_norm = df_target.copy()
-            for col in feature_cols:
-                if col in df_target.columns:
-                     df_norm[col] = (df_target[col] - data_min_s[col]) / data_range_s[col]
-            return df_norm
-        
-        # Normalize Ground Truth
-        print(f"  [ normalization ] Normalizing {dataset_display} ground truth to [0,1] scale based on training range...")
-        df_truth = normalize_df(df_truth)
-        
-        # We need a dummy verification call. We don't have imputed data yet inside loop.
-        # But we can verify CV against truth.
-        verify_fold_data(dataset_display, cv_data, df_truth)
-        
-        for scenario in SCENARIOS:
-            print(f"  Scenario: {scenario}")
-            print("-" * 40)
-            
-            # Load Mask
-            mask_path = os.path.join(DATA_DIR, f"{config['mask_prefix']}_{scenario}.csv")
-            if not os.path.exists(mask_path):
-                print(f"    Mask not found: {mask_path}")
-                continue
-            df_mask = pd.read_csv(mask_path)
-            
-            for method in METHODS:
-                print(f"    Method: {method}")
-                
-                # Load Imputed Data
-                if method == 'mice':
-                    imputed_dfs = []
-                    for m in range(1, 6):
-                        imp_path = os.path.join(BASE_RESULTS_DIR, 'final', 'imputation_results_final', f'fold_{args.fold}', f"{dataset_slug}_{scenario}_mice_imputed_m{m}.csv")
-                        if os.path.exists(imp_path):
-                            print(f"      Loading MICE m={m}: {os.path.basename(imp_path)}")
-                            df_temp = pd.read_csv(imp_path)
-                            if dataset_display in ['MIMIC', 'METABRIC']:
-                                df_temp = normalize_df(df_temp)
-                            imputed_dfs.append(df_temp)
-                    
-                    if len(imputed_dfs) < 5:
-                         print(f"      Warning: Found only {len(imputed_dfs)}/5 MICE files for fold {args.fold}")
-                    
-                    if not imputed_dfs:
-                        continue
-                        
-                else: # Single imputation
-                    imp_path = os.path.join(BASE_RESULTS_DIR, 'final', 'imputation_results_final', f'fold_{args.fold}', f"{dataset_slug}_{scenario}_{method}_imputed.csv")
-                    
-                    if not os.path.exists(imp_path):
-                        print(f"      File not found: {imp_path}")
-                        continue
-                        
-                    print(f"      Loading: {os.path.basename(imp_path)}")
-                    df_imp = pd.read_csv(imp_path)
-                    if dataset_display in ['MIMIC', 'METABRIC']:
-                        df_imp = normalize_df(df_imp)
-                
-                # Calculate for the specific fold only
-                test_idx = cv_data[fold_key]['test']
-                
-                if method == 'mice':
-                    rmse, mae, n_masked = calculate_mice_metrics_for_fold(
-                        test_idx, imputed_dfs, df_mask, df_truth
-                    )
-                    mode_str = "(averaged over 5 imputations)"
-                else:
-                    rmse, mae, n_masked = calculate_metrics_on_indices(
-                        df_truth, df_imp, df_mask, test_idx
-                    )
-                    mode_str = f"({n_masked:,} masked values)"
-                
-                if not np.isnan(rmse):
-                    print(f"      Fold {args.fold}: RMSE={rmse:.4f}, MAE={mae:.4f} {mode_str}")
-                    results.append({
-                        'Dataset': dataset_display,
-                        'Scenario': scenario,
-                        'Method': method,
-                        'Fold': args.fold,
-                        'RMSE': rmse,
-                        'MAE': mae
-                    })
-                
-
-    # Save outputs
-    if results:
-        df_results = pd.DataFrame(results)
-        df_results.to_csv(OUTPUT_FILE, index=False)
-        print(f"Saved fold-level results to {OUTPUT_FILE}")
-        
-        generate_summary_table(df_results, SUMMARY_FILE)
+    if trials_to_run > 0:
+        print(f"  Resuming study: {completed_trials} trials done, {trials_to_run} remaining...")
+        study.optimize(
+            lambda t: objective(t, dataset_data), 
+            n_trials=trials_to_run,
+            callbacks=[lambda s, t: save_callback(s, t, output_path)]
+        )
     else:
-        print("No results generated.")
+        print(f"  Study {study_name} already complete with {completed_trials} trials. Skipping.")
+    
+    print(f"Completed study: {study_name}. Final results in {output_path}")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--trials", type=int, default=100) # Reduced default trials for stability
+    parser.add_argument("--dataset", type=str, choices=DATASETS, help="Run only for this dataset")
+    parser.add_argument("--scenario", type=str, choices=SCENARIOS, help="Run only for this scenario")
+    parser.add_argument("--fold", type=int, default=0, choices=[0,1,2,3,4], help="CV fold index (0-4)")
+    parser.add_argument("--suffix", type=str, default='', help='Optional suffix for output files and study name')
+    args = parser.parse_args()
+    
+    suffix_str = f"_{args.suffix}" if args.suffix else ""
+    target_datasets = [args.dataset] if args.dataset else DATASETS
+    target_scenarios = [args.scenario] if args.scenario else SCENARIOS
+    
+    for d in target_datasets:
+        for s in target_scenarios:
+            print(f"Optimizing Standard VAE for {d} - {s} (Trials: {args.trials})...")
+            run_study(d, s, n_trials=args.trials, fold_idx=args.fold, suffix_str=suffix_str)

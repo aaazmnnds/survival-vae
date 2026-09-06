@@ -23,7 +23,24 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 # Configuration
-DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
+POSSIBLE_DATA_DIRS = [
+    './datasets',
+    'datasets',
+    '../datasets',
+    '/home/azman/VAE/Survival-VAE_study',
+    '/Users/azmannads/VAE 2/Survival-VAE_study',
+    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
+    '.'
+]
+
+DATA_DIR = None
+for p in POSSIBLE_DATA_DIRS:
+    if os.path.exists(p):
+        DATA_DIR = p
+        break
+
+if DATA_DIR is None:
+    DATA_DIR = 'datasets'
 
 def find_truth_file(dataset_name):
     if dataset_name == 'metabric':
@@ -100,7 +117,7 @@ def prepare_data(dataset_name, scenario, fold_idx):
     feature_cols = feature_df_mnar.columns
     X_mnar = feature_df_mnar.values.astype(np.float64)
     X_truth = df_truth[feature_cols].values.astype(np.float64)
-    mask_artificial = df_mask[feature_cols].values.astype(np.float64)
+    mask_artificial = df_mask[feature_cols].values.astype(bool).astype(float)
     T_E_mnar = df_mnar[target_cols].values.astype(np.float64)
     
     split_file = os.path.join(DATA_DIR, SPLIT_FILES[dataset_name])
@@ -124,15 +141,15 @@ def prepare_data(dataset_name, scenario, fold_idx):
 
 def run_study(dataset, scenario, n_trials=100, fold_idx=0):
     os.makedirs(f"final/optuna_results_final/fold_{fold_idx}", exist_ok=True)
-    output_path = f"final/optuna_results_final/fold_{fold_idx}/{dataset}_{scenario}_optuna_missforest_results.csv"
+    output_path = f"final/optuna_results_final/fold_{fold_idx}/{dataset}_{scenario}_optuna_missforest_results{suffix_str}.csv"
     print(f"Loading data for missForest {dataset}-{scenario}...")
     dataset_data = prepare_data(dataset, scenario, fold_idx)
     
     # Use SQLite for persistence to allow skipping/resuming
 
     # Use SQLite for persistence to allow skipping/resuming
-    study_name = f"missforest_{dataset}_{scenario}_fold{fold_idx}"
-    storage_name = f"sqlite:///optuna_missforest_fold{fold_idx}.db"
+    study_name = f"missforest_{dataset}_{scenario}_fold{fold_idx}{suffix_str}"
+    storage_name = f"sqlite:///optuna_missforest_fold{fold_idx}{suffix_str}.db"
     
     study = optuna.create_study(
         study_name=study_name,
@@ -161,7 +178,9 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, choices=['metabric', 'mimic'])
     parser.add_argument("--scenario", type=str, choices=['light', 'moderate', 'severe'])
     parser.add_argument("--fold", type=int, default=0, choices=[0,1,2,3,4], help="CV fold index (0-4)")
+    parser.add_argument("--suffix", type=str, default="", help="Optional suffix for output files")
     args = parser.parse_args()
+    suffix_str = f"_{args.suffix}" if args.suffix else ""
     
     datasets = [args.dataset] if args.dataset else ['metabric', 'mimic']
     scenarios = [args.scenario] if args.scenario else ['light', 'moderate', 'severe']

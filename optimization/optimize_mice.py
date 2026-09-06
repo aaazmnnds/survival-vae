@@ -15,7 +15,25 @@ from sklearn.preprocessing import MinMaxScaler
 warnings.filterwarnings("ignore")
 
 # Configuration
-DATA_DIR = os.environ.get('SVAE_RESULTS_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'datasets'))
+POSSIBLE_DATA_DIRS = [
+    './datasets',
+    'datasets',
+    '../datasets',
+    '/home/azman/VAE/Survival-VAE_study',
+    '/Users/azmannads/VAE 2/Survival-VAE_study',
+    '/Users/azmannads/Documents/Research collections/Research 2025/datasets',
+    '.'
+]
+
+DATA_DIR = None
+for p in POSSIBLE_DATA_DIRS:
+    if os.path.exists(p):
+        DATA_DIR = p
+        break
+
+if DATA_DIR is None:
+    DATA_DIR = 'datasets' # Fallback
+    print(f"Warning: Could not find datasets directory. Defaulting to: {DATA_DIR}")
 
 def find_truth_file(dataset_name):
     if dataset_name == 'metabric':
@@ -136,7 +154,7 @@ def prepare_data(dataset_name, scenario, fold_idx):
     
     X_mnar = feature_df_mnar.values
     X_truth = df_truth[feature_cols].values
-    mask_artificial = df_mask[feature_cols].values.astype(float)
+    mask_artificial = df_mask[feature_cols].values.astype(bool).astype(float)
     T_E_mnar = df_mnar[target_cols].values
     
     train_idx, val_idx = load_split_indices(dataset_name, fold_idx=fold_idx)
@@ -161,9 +179,9 @@ def prepare_data(dataset_name, scenario, fold_idx):
     return (X_train, X_val_input, X_val_truth_scaled, mask_val_artificial, feature_cols)
 
 def run_study(dataset, scenario, n_trials=100, fold_idx=0):
-    study_name = f"mice_{dataset}_{scenario}_fold{fold_idx}"
+    study_name = f"mice_{dataset}_{scenario}_fold{fold_idx}{suffix_str}"
     os.makedirs(f"final/optuna_results_final/fold_{fold_idx}", exist_ok=True)
-    output_path = f"final/optuna_results_final/fold_{fold_idx}/{dataset}_{scenario}_optuna_mice_results.csv"
+    output_path = f"final/optuna_results_final/fold_{fold_idx}/{dataset}_{scenario}_optuna_mice_results{suffix_str}.csv"
     
     # Pre-load data once
     print(f"Loading data for {dataset}...")
@@ -172,8 +190,8 @@ def run_study(dataset, scenario, n_trials=100, fold_idx=0):
     # Use SQLite for persistence to allow skipping/resuming
 
     # Use SQLite for persistence to allow skipping/resuming
-    study_name = f"mice_{dataset}_{scenario}_fold{fold_idx}"
-    storage_name = f"sqlite:///optuna_mice_fold{fold_idx}.db"
+    study_name = f"mice_{dataset}_{scenario}_fold{fold_idx}{suffix_str}"
+    storage_name = f"sqlite:///optuna_mice_fold{fold_idx}{suffix_str}.db"
     
     study = optuna.create_study(
         study_name=study_name,
@@ -204,7 +222,9 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, choices=DATASETS, help="Run only for this dataset")
     parser.add_argument("--scenario", type=str, choices=SCENARIOS, help="Run only for this scenario")
     parser.add_argument("--fold", type=int, default=0, choices=[0,1,2,3,4], help="CV fold index (0-4)")
+    parser.add_argument("--suffix", type=str, default="", help="Optional suffix for output files")
     args = parser.parse_args()
+    suffix_str = f"_{args.suffix}" if args.suffix else ""
     
     target_datasets = [args.dataset] if args.dataset else DATASETS
     target_scenarios = [args.scenario] if args.scenario else SCENARIOS
